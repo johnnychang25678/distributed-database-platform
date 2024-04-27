@@ -3,6 +3,7 @@ package org.example;
 import java.io.*;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.ArrayList;
 import java.util.List;
 
 // RMI server implementation, provide service
@@ -81,8 +82,7 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         }
     }
 
-    @Override
-    public void update(List<String> columns, List<String> values, String[] where) throws RemoteException {
+    private void updateHelper(List<String> columns, List<String> values, String[] where, boolean isUpdate) {
         try {
             boolean updated = false;
             File tempFile = new File("temp-" + csvFileName);
@@ -102,6 +102,7 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 }
                 if (whereIndex == -1) {
                     System.out.println("Where column not found");
+                    tempFile.delete();
                     return;
                 }
                 // write header to temp file
@@ -112,13 +113,19 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                     // if where condition is met, update columns with values
                     String[] row = line.split(",");
                     if (row[whereIndex].equals(where[1])) {
-                        for (int i = 0; i < columns.size(); i++) {
-                            for (int j = 0; j < headerColumns.length; j++) {
-                                if (headerColumns[j].equals(columns.get(i))) {
-                                    row[j] = values.get(i);
-                                    updated = true;
+                        if (isUpdate) {
+                            for (int i = 0; i < columns.size(); i++) {
+                                for (int j = 0; j < headerColumns.length; j++) {
+                                    if (headerColumns[j].equals(columns.get(i))) {
+                                        row[j] = values.get(i);
+                                        updated = true;
+                                    }
                                 }
                             }
+                        } else {
+                            // do not write this line
+                            updated = true;
+                            continue;
                         }
                     }
                     writer.newLine();
@@ -144,5 +151,16 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
             System.out.println("Error updating csv file");
             e.printStackTrace();
         }
+
+    }
+
+    @Override
+    public void update(List<String> columns, List<String> values, String[] where) throws RemoteException {
+        updateHelper(columns, values, where, true);
+    }
+
+    @Override
+    public void delete(String[] where) throws RemoteException {
+        updateHelper(new ArrayList<>(), new ArrayList<>(), where, false);
     }
 }

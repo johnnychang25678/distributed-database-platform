@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.*;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.statement.update.UpdateSet;
@@ -43,6 +44,7 @@ public class Coordinator {
         server.createContext("/insert", new InsertHandler());
         server.createContext("/select", new SelectHandler());
         server.createContext("/update", new UpdateHandler());
+        server.createContext("/delete", new DeleteHandler());
         server.setExecutor(Executors.newCachedThreadPool()); // to avoid creating and destroying thread every request
         server.start();
         System.out.println("Coordinator server started on port " + port);
@@ -221,6 +223,50 @@ public class Coordinator {
                             // just support simple where now
                             Expression where = update.getWhere();
                             databases.get(key).update(cols, values, where.toString());
+                        } else {
+                            handleBadRequest(exchange);
+                        }
+                    } else {
+                        // handle NoSQL
+                    }
+
+                } catch (DatabindException | JSQLParserException e) {
+                    e.printStackTrace();
+                    handleBadRequest(exchange);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                handleOkResponse(exchange);
+            }
+        }
+    }
+
+    private class DeleteHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    DeleteRequestDto deleteRequestDto =
+                            mapper.readValue(exchange.getRequestBody(), DeleteRequestDto.class);
+                    String databaseType = deleteRequestDto.getDatabaseType();
+                    if (databaseType.equals("SQL")) {
+                        // get the statement from the request body
+                        String statementString = deleteRequestDto.getStatement();
+                        System.out.println(statementString);
+                        Statement statement = CCJSqlParserUtil.parse(statementString);
+                        // check if the statement is an update statement
+                        if (statement instanceof Delete) {
+                            Delete delete = (Delete) statement;
+                            Table table = delete.getTable();
+                            String tableName = table.getName();
+                            String key = tableName + "-SQL";
+                            if (!databases.containsKey(key)) {
+                                handleBadRequest(exchange, "table not exist");
+                                return;
+                            }
+                            // just support simple where now
+                            Expression where = delete.getWhere();
+                            databases.get(key).delete(where.toString());
                         } else {
                             handleBadRequest(exchange);
                         }

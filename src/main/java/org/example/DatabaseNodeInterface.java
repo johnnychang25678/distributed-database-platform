@@ -10,4 +10,5 @@ public interface DatabaseNodeInterface extends Remote {
     String select() throws RemoteException;
     void insert(List<String> columns, List<String> values) throws RemoteException;
     void update(List<String> columns, List<String> values, String[] where) throws RemoteException;
+    void delete(String[] where) throws RemoteException;
 }

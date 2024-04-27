@@ -75,4 +75,19 @@ public class DatabaseNodeClient {
             }
         }
     }
+
+    public void delete(String where) {
+        // delete from all replicas
+        System.out.println("Deleting from replicas");
+        for (DatabaseNodeInterface replica : replicas) {
+            try {
+                String[] whereParts = where.split("=");
+                String[] whereArr = {whereParts[0].trim(), whereParts[1].trim()};
+                replica.delete(whereArr);
+            } catch (RemoteException e) {
+                System.out.println("RMI error deleting from replica");
+                e.printStackTrace();
+            }
+        }
+    }
 }
