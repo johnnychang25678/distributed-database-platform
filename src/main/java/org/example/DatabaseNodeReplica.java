@@ -1,8 +1,6 @@
 package org.example;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.List;
@@ -35,8 +33,20 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     }
 
     @Override
-    public void select() throws RemoteException {
-
+    public String select() throws RemoteException {
+        // return all data as string from csv file
+        StringBuilder data = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new FileReader(csvFileName))) {
+            reader.readLine(); // skip header
+            String line;
+            while ((line = reader.readLine()) != null) {
+                data.append(line).append("\n");
+            }
+        } catch (IOException e) {
+            System.out.println("Error reading from csv file");
+            e.printStackTrace();
+        }
+        return data.toString();
     }
 
     @Override

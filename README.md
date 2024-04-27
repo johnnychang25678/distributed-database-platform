@@ -13,9 +13,6 @@ mvn clean package && mvn exec:java -Dexec.mainClass="org.example.Coordinator"
 rmiregistry -J-Djava.rmi.server.codebase=file:$(pwd)/target/classes/ -J-Djava.class.path=$(pwd)/target/classes/
 
 ```
-3. Start the server with:
-```
-```
 
 
 ## Description of project topic, goals, and tasks

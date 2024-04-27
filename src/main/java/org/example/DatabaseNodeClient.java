@@ -47,13 +47,14 @@ public class DatabaseNodeClient {
         }
     }
 
-    public void select() {
+    public String select() {
         // read from first replica
         try {
-            replicas.get(0).select();
+            return replicas.get(0).select();
         } catch (RemoteException e) {
             System.out.println("RMI error selecting from replica");
             e.printStackTrace();
         }
+        return "";
     }
 }

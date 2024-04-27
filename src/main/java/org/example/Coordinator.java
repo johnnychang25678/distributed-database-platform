@@ -3,6 +3,9 @@ import com.fasterxml.jackson.databind.DatabindException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.*;
 import net.sf.jsqlparser.expression.Expression;
+import net.sf.jsqlparser.schema.Table;
+import net.sf.jsqlparser.statement.select.PlainSelect;
+import net.sf.jsqlparser.statement.select.Select;
 import org.example.dto.CreateRequestDto;
 import org.example.dto.InsertRequestDto;
 import net.sf.jsqlparser.JSQLParserException;
@@ -12,6 +15,7 @@ import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.create.table.ColumnDefinition;
 import net.sf.jsqlparser.statement.create.table.CreateTable;
 import net.sf.jsqlparser.statement.insert.Insert;
+import org.example.dto.SelectRequestDto;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -37,10 +41,12 @@ public class Coordinator {
         // create a new context for the server
         server.createContext("/create", new CreateHandler());
         server.createContext("/insert", new InsertHandler());
+        server.createContext("/select", new SelectHandler());
         server.setExecutor(Executors.newCachedThreadPool()); // to avoid creating and destroying thread every request
         server.start();
         System.out.println("Coordinator server started on port " + port);
     }
+
 
     // Handler that accepts /create POST request, the request body is a JSON object with key "statement" and value "CREATE TABLE ..."
     // The handler will parse the sql statement with jSqlParser, and if it's valid,
@@ -136,6 +142,46 @@ public class Coordinator {
                     e.printStackTrace();
                 }
                 handleOkResponse(exchange);
+            }
+        }
+    }
+
+    private class SelectHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    SelectRequestDto selectRequestDto = mapper.readValue(exchange.getRequestBody(), SelectRequestDto.class);
+                    String databaseType = selectRequestDto.getDatabaseType();
+                    if (databaseType.equals("SQL")) {
+                        // get the statement from the request body
+                        String statementString = selectRequestDto.getStatement();
+                        System.out.println(statementString);
+                        Statement statement = CCJSqlParserUtil.parse(statementString);
+                        // check if the statement is a select statement
+                        if (statement instanceof PlainSelect) {
+                            PlainSelect select = (PlainSelect) statement;
+                            Table table = (Table) select.getFromItem();
+                            String tableName = table.getName();
+                            // check if the table exists
+                            if (!databases.containsKey(tableName)) {
+                                handleBadRequest(exchange, "table not exist");
+                                return;
+                            }
+                            // will just support select * for now
+                            String result = databases.get(tableName).select();
+                            handleResponse(exchange, result);
+                        } else {
+                            // handle NoSQL
+                        }
+                    }
+
+                } catch (DatabindException | JSQLParserException e) {
+                    e.printStackTrace();
+                    handleBadRequest(exchange);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
