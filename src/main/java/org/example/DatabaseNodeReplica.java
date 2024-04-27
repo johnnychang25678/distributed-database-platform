@@ -34,6 +34,16 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
 
     @Override
     public String select() throws RemoteException {
+        try {
+            return readAll();
+        } catch (IOException e) {
+            System.out.println("Error reading from csv file");
+            e.printStackTrace();
+        }
+        return "";
+    }
+
+    private String readAll() throws IOException {
         // return all data as string from csv file
         StringBuilder data = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new FileReader(csvFileName))) {
@@ -72,7 +82,67 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     }
 
     @Override
-    public void update() throws RemoteException {
-
+    public void update(List<String> columns, List<String> values, String[] where) throws RemoteException {
+        try {
+            boolean updated = false;
+            File tempFile = new File("temp-" + csvFileName);
+            // read row and update if where condition is met, write to temp file
+            try (BufferedReader reader = new BufferedReader(new FileReader(csvFileName));
+                 BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))
+            ) {
+                String header = reader.readLine();
+                // match header columns with where condition [0]
+                String[] headerColumns = header.split(",");
+                int whereIndex = -1;
+                for (int i = 0; i < headerColumns.length; i++) {
+                    if (headerColumns[i].equals(where[0])) {
+                        whereIndex = i;
+                        break;
+                    }
+                }
+                if (whereIndex == -1) {
+                    System.out.println("Where column not found");
+                    return;
+                }
+                // write header to temp file
+                writer.write(header);
+                // read each row
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    // if where condition is met, update columns with values
+                    String[] row = line.split(",");
+                    if (row[whereIndex].equals(where[1])) {
+                        for (int i = 0; i < columns.size(); i++) {
+                            for (int j = 0; j < headerColumns.length; j++) {
+                                if (headerColumns[j].equals(columns.get(i))) {
+                                    row[j] = values.get(i);
+                                    updated = true;
+                                }
+                            }
+                        }
+                    }
+                    writer.newLine();
+                    writer.write(String.join(",", row));
+                }
+            }
+            if (!updated) {
+                System.out.println("No rows updated");
+                // delete temp file
+                tempFile.delete();
+                return;
+            }
+            // delete original file and rename temp file
+            File originalFile = new File(csvFileName);
+            if (originalFile.delete()) {
+                if (!tempFile.renameTo(originalFile)) {
+                    System.out.println("Error renaming temp file");
+                }
+            } else {
+                System.out.println("Error deleting original file");
+            }
+        } catch (IOException e) {
+            System.out.println("Error updating csv file");
+            e.printStackTrace();
+        }
     }
 }

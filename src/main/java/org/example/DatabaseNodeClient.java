@@ -49,6 +49,7 @@ public class DatabaseNodeClient {
 
     public String select() {
         // read from first replica
+        System.out.println("Selecting from replicas");
         try {
             return replicas.get(0).select();
         } catch (RemoteException e) {
@@ -56,5 +57,22 @@ public class DatabaseNodeClient {
             e.printStackTrace();
         }
         return "";
+    }
+
+    public void update(List<String> columns, List<String> values, String where) {
+        // update all replicas
+        System.out.println("Updating replicas");
+        for (DatabaseNodeInterface replica : replicas) {
+            try {
+                // where clause is now FirstName = 'John'
+                // convert to ["FirstName", "John"]
+                String[] whereParts = where.split("=");
+                String[] whereArr = {whereParts[0].trim(), whereParts[1].trim()};
+                replica.update(columns, values, whereArr);
+            } catch (RemoteException e) {
+                System.out.println("RMI error updating replica");
+                e.printStackTrace();
+            }
+        }
     }
 }

@@ -5,9 +5,9 @@ import com.sun.net.httpserver.*;
 import net.sf.jsqlparser.expression.Expression;
 import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.select.PlainSelect;
-import net.sf.jsqlparser.statement.select.Select;
-import org.example.dto.CreateRequestDto;
-import org.example.dto.InsertRequestDto;
+import net.sf.jsqlparser.statement.update.Update;
+import net.sf.jsqlparser.statement.update.UpdateSet;
+import org.example.dto.*;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
@@ -15,7 +15,6 @@ import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.create.table.ColumnDefinition;
 import net.sf.jsqlparser.statement.create.table.CreateTable;
 import net.sf.jsqlparser.statement.insert.Insert;
-import org.example.dto.SelectRequestDto;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -33,6 +32,7 @@ public class Coordinator {
     }
 
     private ObjectMapper mapper = new ObjectMapper();
+    // tablename-"SQL | NoSQL" -> DatabaseNodeClient
     private Map<String, DatabaseNodeClient> databases = new HashMap<>();
 
     private void run(int port) throws IOException {
@@ -42,6 +42,7 @@ public class Coordinator {
         server.createContext("/create", new CreateHandler());
         server.createContext("/insert", new InsertHandler());
         server.createContext("/select", new SelectHandler());
+        server.createContext("/update", new UpdateHandler());
         server.setExecutor(Executors.newCachedThreadPool()); // to avoid creating and destroying thread every request
         server.start();
         System.out.println("Coordinator server started on port " + port);
@@ -73,11 +74,12 @@ public class Coordinator {
                                     columnNames,
                                     replicaCount
                             );
-                            if (databases.containsKey(tableName)) {
+                            String key = tableName + "-SQL";
+                            if (databases.containsKey(key)) {
                                 handleBadRequest(exchange);
                                 return;
                             }
-                            databases.put(tableName, node);
+                            databases.put(key, node);
                         } else {
                             handleBadRequest(exchange);
                         }
@@ -113,28 +115,27 @@ public class Coordinator {
                         if (statement instanceof Insert) {
                             Insert insert = (Insert) statement;
                             String tableName = insert.getTable().getName();
+                            String key = tableName + "-SQL";
                             // check if the table exists
-                            if (!databases.containsKey(tableName)) {
+                            if (!databases.containsKey(key)) {
                                 handleBadRequest(exchange, "table not exist");
                                 return;
                             }
                             // check if insert.getColumns() is a subset of databases.get(tableName).getColumns()
                             List<String> insertCols = insert.getColumns().stream().map(Column::getColumnName).toList();
-                            List<String> tableCols = databases.get(tableName).getColumns();
+                            List<String> tableCols = databases.get(key).getColumns();
                             if (!tableCols.containsAll(insertCols)) {
                                 handleBadRequest(exchange, "invalid columns");
                                 return;
                             }
                             List<String> values = insert.getValues().getExpressions().stream().map(Expression::toString).toList();
-                            databases.get(tableName).insert(insertCols, values);
-
+                            databases.get(key).insert(insertCols, values);
                         } else {
                             handleBadRequest(exchange);
                         }
                     } else {
                         // handle NoSQL
                     }
-
                 } catch(DatabindException | JSQLParserException e) {
                     e.printStackTrace();
                     handleBadRequest(exchange);
@@ -163,13 +164,14 @@ public class Coordinator {
                             PlainSelect select = (PlainSelect) statement;
                             Table table = (Table) select.getFromItem();
                             String tableName = table.getName();
+                            String key = tableName + "-SQL";
                             // check if the table exists
-                            if (!databases.containsKey(tableName)) {
+                            if (!databases.containsKey(key)) {
                                 handleBadRequest(exchange, "table not exist");
                                 return;
                             }
                             // will just support select * for now
-                            String result = databases.get(tableName).select();
+                            String result = databases.get(key).select();
                             handleResponse(exchange, result);
                         } else {
                             // handle NoSQL
@@ -186,6 +188,56 @@ public class Coordinator {
         }
     }
 
+    private class UpdateHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    UpdateRequestDto updateRequestDto =
+                            mapper.readValue(exchange.getRequestBody(), UpdateRequestDto.class);
+                    String databaseType = updateRequestDto.getDatabaseType();
+                    if (databaseType.equals("SQL")) {
+                        // get the statement from the request body
+                        String statementString = updateRequestDto.getStatement();
+                        System.out.println(statementString);
+                        Statement statement = CCJSqlParserUtil.parse(statementString);
+                        // check if the statement is an update statement
+                        if (statement instanceof Update) {
+                            Update update = (Update) statement;
+                            Table table = update.getTable();
+                            String tableName = table.getName();
+                            String key = tableName + "-SQL";
+                            if (!databases.containsKey(key)) {
+                                handleBadRequest(exchange, "table not exist");
+                                return;
+                            }
+                            List<UpdateSet> updateSets = update.getUpdateSets();
+                            List<String> cols = new ArrayList<>();
+                            List<String> values = new ArrayList<>();
+                            for (UpdateSet updateSet : updateSets) {
+                                cols.add(updateSet.getColumns().get(0).toString());
+                                values.add(updateSet.getValues().get(0).toString());
+                            }
+                            // just support simple where now
+                            Expression where = update.getWhere();
+                            databases.get(key).update(cols, values, where.toString());
+                        } else {
+                            handleBadRequest(exchange);
+                        }
+                    } else {
+                        // handle NoSQL
+                    }
+
+                } catch (DatabindException | JSQLParserException e) {
+                    e.printStackTrace();
+                    handleBadRequest(exchange);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                handleOkResponse(exchange);
+            }
+        }
+    }
     // ****************** helper functions ********************
     private void handleResponse(HttpExchange exchange, String response) throws IOException {
         exchange.getResponseHeaders().add("Content-Type", "application/json");
