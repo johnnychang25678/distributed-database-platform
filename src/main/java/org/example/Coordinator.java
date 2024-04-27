@@ -26,9 +26,7 @@ import java.util.concurrent.Executors;
 public class Coordinator {
     // main method to start the program
     public static void main(String[] args) throws IOException {
-        // create a new instance of the Coordinator class
         Coordinator coordinator = new Coordinator();
-        // call the run method on the coordinator instance
         coordinator.run(8080);
     }
 
@@ -78,20 +76,25 @@ public class Coordinator {
                             );
                             String key = tableName + "-SQL";
                             if (databases.containsKey(key)) {
-                                handleBadRequest(exchange);
+                                handleBadRequest(exchange, "table already exists");
                                 return;
                             }
                             databases.put(key, node);
                         } else {
-                            handleBadRequest(exchange);
+                            handleBadRequest(exchange, "invalid create statement");
+                            return;
                         }
-                    } else {
+                    } else if (databaseType.equals("NoSQL")) {
                         // handle NoSQL
+                    } else {
+                        handleBadRequest(exchange);
+                        return;
                     }
 
                 } catch (DatabindException | JSQLParserException e) {
                     e.printStackTrace();
                     handleBadRequest(exchange);
+                    return;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -133,14 +136,19 @@ public class Coordinator {
                             List<String> values = insert.getValues().getExpressions().stream().map(Expression::toString).toList();
                             databases.get(key).insert(insertCols, values);
                         } else {
-                            handleBadRequest(exchange);
+                            handleBadRequest(exchange, "invalid insert statement");
+                            return;
                         }
-                    } else {
+                    } else if (databaseType.equals("NoSQL")){
                         // handle NoSQL
+                    } else {
+                        handleBadRequest(exchange);
+                        return;
                     }
                 } catch(DatabindException | JSQLParserException e) {
                     e.printStackTrace();
                     handleBadRequest(exchange);
+                    return;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -176,10 +184,9 @@ public class Coordinator {
                             String result = databases.get(key).select();
                             handleResponse(exchange, result);
                         } else {
-                            // handle NoSQL
+                            handleBadRequest(exchange, "invalid select statement");
                         }
                     }
-
                 } catch (DatabindException | JSQLParserException e) {
                     e.printStackTrace();
                     handleBadRequest(exchange);
@@ -224,7 +231,8 @@ public class Coordinator {
                             Expression where = update.getWhere();
                             databases.get(key).update(cols, values, where.toString());
                         } else {
-                            handleBadRequest(exchange);
+                            handleBadRequest(exchange, "invalid update statement");
+                            return;
                         }
                     } else {
                         // handle NoSQL
@@ -233,6 +241,7 @@ public class Coordinator {
                 } catch (DatabindException | JSQLParserException e) {
                     e.printStackTrace();
                     handleBadRequest(exchange);
+                    return;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -269,6 +278,7 @@ public class Coordinator {
                             databases.get(key).delete(where.toString());
                         } else {
                             handleBadRequest(exchange);
+                            return;
                         }
                     } else {
                         // handle NoSQL
@@ -277,6 +287,7 @@ public class Coordinator {
                 } catch (DatabindException | JSQLParserException e) {
                     e.printStackTrace();
                     handleBadRequest(exchange);
+                    return;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
