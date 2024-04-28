@@ -105,6 +105,19 @@ public class DatabaseNodeClient {
         }
     }
 
+    public void updateNoSQL(List<String> kvPairs, List<String> where) {
+        // update all replicas
+        System.out.println("Updating replicas");
+        for (DatabaseNodeInterface replica : replicas) {
+            try {
+                replica.updateNoSQL(kvPairs, where);
+            } catch (RemoteException e) {
+                System.out.println("RMI error updating replica");
+                e.printStackTrace();
+            }
+        }
+    }
+
     public void deleteSQL(String where) {
         // delete from all replicas
         System.out.println("Deleting from replicas");

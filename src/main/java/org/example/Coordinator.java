@@ -298,8 +298,40 @@ public class Coordinator {
                             handleBadRequest(exchange, "invalid update statement");
                             return;
                         }
-                    } else {
+                    } else if (databaseType.equals("NoSQL")) {
                         // handle NoSQL
+                        // UPDATE Users key1 value1 key2 value2 WHERE key3 value3
+                        String statementString = updateRequestDto.getStatement();
+                        System.out.println(statementString);
+                        List<String> statementList = Arrays.asList(statementString.split(" "));
+                        String update = statementList.get(0);
+                        if (!update.equals("UPDATE")) {
+                            handleBadRequest(exchange, "invalid update statement");
+                            return;
+                        }
+                        if (statementList.size() < 4) {
+                            // at least on key-value pair
+                            handleBadRequest(exchange, "invalid update statement");
+                            return;
+                        }
+                        String tableName = statementList.get(1);
+                        String key = tableName + "-NoSQL";
+                        if (!databases.containsKey(key)) {
+                            handleBadRequest(exchange, "table not exist");
+                            return;
+                        }
+                        // find WHERE
+                        int whereIndex = statementList.indexOf("WHERE");
+                        if (whereIndex == -1) {
+                            handleBadRequest(exchange, "invalid update statement");
+                            return;
+                        }
+                        List<String> kvPairs = statementList.subList(2, whereIndex);
+                        List<String> where = statementList.subList(whereIndex + 1, statementList.size()); // only support simple where for now
+                        databases.get(key).updateNoSQL(kvPairs, where);
+                    } else {
+                        handleBadRequest(exchange);
+                        return;
                     }
 
                 } catch (DatabindException | JSQLParserException e) {

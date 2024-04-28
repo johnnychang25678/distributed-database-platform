@@ -4,6 +4,7 @@ import java.io.*;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 // RMI server implementation, provide service
@@ -199,8 +200,55 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     }
 
     @Override
-    public void updateNoSQL(List<String> columns, List<String> values, String[] where) throws RemoteException {
+    public void updateNoSQL(List<String> kvPairs, List<String> where) throws RemoteException {
+        // update all rows with where condition
+        try {
+            boolean updated = false;
+            File tempFile = new File("temp-" + csvFileName);
+            try (BufferedReader reader = new BufferedReader(new FileReader(csvFileName));
+                 BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))
+            ) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] row = line.split(","); // key, value, key, value
+                    // System.out.println("*************" + Arrays.toString(row) + "*************");
+                    for (int i = 0; i < row.length; i += 2) {
+                        String key = row[i];
+                        if (key.equals(where.get(0)) && row[i + 1].equals(where.get(1))) {
+                            // update key value pairs
+                            for (int j = 0; j < kvPairs.size(); j += 2) {
+                                // should scan all keys and update values
+                                for (int k = 0; k < row.length; k += 2) {
+                                    if (row[k].equals(kvPairs.get(j))) {
+                                        row[k + 1] = kvPairs.get(j + 1);
+                                        updated = true;
+                                    }
+                                }
+                            }
 
+                        }
+                    }
+                    writer.write(String.join(",", row));
+                    writer.newLine();
+                }
+            }
+            if (!updated) {
+                System.out.println("No rows updated");
+                tempFile.delete();
+                return;
+            }
+            File originalFile = new File(csvFileName);
+            if (originalFile.delete()) {
+                if (!tempFile.renameTo(originalFile)) {
+                    System.out.println("Error renaming temp file");
+                }
+            } else {
+                System.out.println("Error deleting original file");
+            }
+        } catch (IOException e) {
+            System.out.println("Error updating csv file");
+            e.printStackTrace();
+        }
     }
 
     @Override
