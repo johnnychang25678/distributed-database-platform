@@ -13,5 +13,5 @@ public interface DatabaseNodeInterface extends Remote {
     String selectNoSQL() throws RemoteException;
     void insertNoSQL(List<String> kvPairs) throws RemoteException;
     void updateNoSQL(List<String> kvPairs, List<String> where) throws RemoteException;
-    void deleteNoSQL(String[] where) throws RemoteException;
+    void deleteNoSQL(List<String> where) throws RemoteException;
 }

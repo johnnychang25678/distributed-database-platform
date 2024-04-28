@@ -376,8 +376,39 @@ public class Coordinator {
                             handleBadRequest(exchange);
                             return;
                         }
-                    } else {
+                    } else if (databaseType.equals("NoSQL")){
                         // handle NoSQL
+                        // DELETE Users WHERE key value
+                        String statementString = deleteRequestDto.getStatement();
+                        System.out.println(statementString);
+                        List<String> statementList = Arrays.asList(statementString.split(" "));
+                        String delete = statementList.get(0);
+                        if (!delete.equals("DELETE")) {
+                            handleBadRequest(exchange, "invalid delete statement");
+                            return;
+                        }
+                        if (statementList.size() < 5) {
+                            // at least on key-value pair
+                            handleBadRequest(exchange, "invalid delete statement");
+                            return;
+                        }
+                        String tableName = statementList.get(1);
+                        String key = tableName + "-NoSQL";
+                        if (!databases.containsKey(key)) {
+                            handleBadRequest(exchange, "table not exist");
+                            return;
+                        }
+                        // find WHERE
+                        int whereIndex = statementList.indexOf("WHERE");
+                        if (whereIndex == -1) {
+                            handleBadRequest(exchange, "invalid delete statement");
+                            return;
+                        }
+                        List<String> where = statementList.subList(whereIndex + 1, statementList.size());
+                        databases.get(key).deleteNoSQL(where);
+                    } else {
+                        handleBadRequest(exchange);
+                        return;
                     }
 
                 } catch (DatabindException | JSQLParserException e) {

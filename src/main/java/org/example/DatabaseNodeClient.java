@@ -132,4 +132,17 @@ public class DatabaseNodeClient {
             }
         }
     }
+
+    public void deleteNoSQL(List<String> where) {
+        // delete from all replicas
+        System.out.println("Deleting from replicas");
+        for (DatabaseNodeInterface replica : replicas) {
+            try {
+                replica.deleteNoSQL(where);
+            } catch (RemoteException e) {
+                System.out.println("RMI error deleting from replica");
+                e.printStackTrace();
+            }
+        }
+    }
 }

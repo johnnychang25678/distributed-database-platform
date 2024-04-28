@@ -252,7 +252,48 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     }
 
     @Override
-    public void deleteNoSQL(String[] where) throws RemoteException {
-
+    public void deleteNoSQL(List<String> where) throws RemoteException {
+        // delete all rows with where condition
+        try {
+            boolean deleted = false;
+            File tempFile = new File("temp-" + csvFileName);
+            try (BufferedReader reader = new BufferedReader(new FileReader(csvFileName));
+                 BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))
+            ) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] row = line.split(","); // key, value, key, value
+                    boolean match = true;
+                    for (int i = 0; i < row.length; i += 2) {
+                        String key = row[i];
+                        if (key.equals(where.get(0)) && row[i + 1].equals(where.get(1))) {
+                            match = false;
+                            deleted = true;
+                            break;
+                        }
+                    }
+                    if (match) {
+                        writer.write(String.join(",", row));
+                        writer.newLine();
+                    }
+                }
+            }
+            if (!deleted) {
+                System.out.println("No rows deleted");
+                tempFile.delete();
+                return;
+            }
+            File originalFile = new File(csvFileName);
+            if (originalFile.delete()) {
+                if (!tempFile.renameTo(originalFile)) {
+                    System.out.println("Error renaming temp file");
+                }
+            } else {
+                System.out.println("Error deleting original file");
+            }
+        } catch (IOException e) {
+            System.out.println("Error deleting from csv file");
+            e.printStackTrace();
+        }
     }
 }
