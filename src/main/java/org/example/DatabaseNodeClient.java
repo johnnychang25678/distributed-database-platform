@@ -65,11 +65,22 @@ public class DatabaseNodeClient {
         }
     }
 
-    public String select() {
+    public String selectSQL() {
         // read from first replica
         System.out.println("Selecting from replicas");
         try {
-            return replicas.get(0).select();
+            return replicas.get(0).selectSQL();
+        } catch (RemoteException e) {
+            System.out.println("RMI error selecting from replica");
+            e.printStackTrace();
+        }
+        return "";
+    }
+    public String selectNoSQL() {
+        // read from first replica
+        System.out.println("Selecting from replicas");
+        try {
+            return replicas.get(0).selectNoSQL();
         } catch (RemoteException e) {
             System.out.println("RMI error selecting from replica");
             e.printStackTrace();

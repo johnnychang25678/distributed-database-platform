@@ -36,9 +36,9 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     }
 
     @Override
-    public String select() throws RemoteException {
+    public String selectSQL() throws RemoteException {
         try {
-            return readAll();
+            return readAll(true);
         } catch (IOException e) {
             System.out.println("Error reading from csv file");
             e.printStackTrace();
@@ -46,11 +46,24 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         return "";
     }
 
-    private String readAll() throws IOException {
+    @Override
+    public String selectNoSQL() throws RemoteException {
+        try {
+            return readAll(false);
+        } catch (IOException e) {
+            System.out.println("Error reading from csv file");
+            e.printStackTrace();
+        }
+        return "";
+    }
+
+    private String readAll(boolean skipHeader) throws IOException {
         // return all data as string from csv file
         StringBuilder data = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new FileReader(csvFileName))) {
-            reader.readLine(); // skip header
+            if (skipHeader) {
+                reader.readLine(); // skip header
+            }
             String line;
             while ((line = reader.readLine()) != null) {
                 data.append(line).append("\n");

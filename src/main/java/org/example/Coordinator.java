@@ -224,11 +224,32 @@ public class Coordinator {
                                 return;
                             }
                             // will just support select * for now
-                            String result = databases.get(key).select();
+                            String result = databases.get(key).selectSQL();
                             handleResponse(exchange, result);
                         } else {
                             handleBadRequest(exchange, "invalid select statement");
                         }
+                    } else if (databaseType.equals("NoSQL")) {
+                        // handle NoSQL
+                        // SELECT Users (just support select all for now)
+                        String statementString = selectRequestDto.getStatement();
+                        System.out.println(statementString);
+                        String[] split = statementString.split(" ");
+                        if (split.length != 2) {
+                            handleBadRequest(exchange, "invalid select statement");
+                            return;
+                        }
+                        String tableName = split[1];
+                        String key = tableName + "-NoSQL";
+                        if (!databases.containsKey(key)) {
+                            handleBadRequest(exchange, "table not exist");
+                            return;
+                        }
+                        // will just support select * for now
+                        String result = databases.get(key).selectNoSQL();
+                        handleResponse(exchange, result);
+                    } else {
+                        handleBadRequest(exchange);
                     }
                 } catch (DatabindException | JSQLParserException e) {
                     e.printStackTrace();
