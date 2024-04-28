@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 
 public class Coordinator {
@@ -32,7 +33,7 @@ public class Coordinator {
 
     private ObjectMapper mapper = new ObjectMapper();
     // tablename-"SQL | NoSQL" -> DatabaseNodeClient
-    private Map<String, DatabaseNodeClient> databases = new HashMap<>();
+    private Map<String, DatabaseNodeClient> databases = new ConcurrentHashMap<>();
 
     private void run(int port) throws IOException {
         // an http server that listens on the specified port
@@ -86,6 +87,25 @@ public class Coordinator {
                         }
                     } else if (databaseType.equals("NoSQL")) {
                         // handle NoSQL
+                        // CREATE TABLE users
+                        // schema is not needed
+                        if (statementString.trim().startsWith("CREATE TABLE")) {
+                            String[] split = statementString.split(" ");
+                            if (split.length != 3) {
+                                handleBadRequest(exchange, "invalid create statement");
+                                return;
+                            }
+                            String tableName = split[2];
+                            String key = tableName + "-NoSQL";
+                            if (databases.containsKey(key)) {
+                                handleBadRequest(exchange, "table already exists");
+                                return;
+                            }
+                            databases.put(key, new DatabaseNodeClient(tableName, null, replicaCount));
+                        } else {
+                            handleBadRequest(exchange);
+                            return;
+                        }
                     } else {
                         handleBadRequest(exchange);
                         return;
@@ -134,13 +154,36 @@ public class Coordinator {
                                 return;
                             }
                             List<String> values = insert.getValues().getExpressions().stream().map(Expression::toString).toList();
-                            databases.get(key).insert(insertCols, values);
+                            databases.get(key).insertSQL(insertCols, values);
                         } else {
                             handleBadRequest(exchange, "invalid insert statement");
                             return;
                         }
                     } else if (databaseType.equals("NoSQL")){
                         // handle NoSQL
+                        // INSERT key1 value1 key2 value2
+                        String statementString = insertRequestDto.getStatement();
+                        System.out.println(statementString);
+                        List<String> statementList = Arrays.asList(statementString.split(" "));
+                        String insert = statementList.get(0);
+                        if (!insert.equals("INSERT")) {
+                            handleBadRequest(exchange, "invalid insert statement");
+                            return;
+                        }
+                        if (statementList.size() < 4) {
+                            // at least on key-value pair
+                            handleBadRequest(exchange, "invalid insert statement");
+                            return;
+                        }
+                        String tableName = statementList.get(1);
+                        String key = tableName + "-NoSQL";
+                        System.out.println("********** " + key);
+                        if (!databases.containsKey(key)) {
+                            handleBadRequest(exchange, "table not exist");
+                            return;
+                        }
+                        List<String> kvPairs = statementList.subList(2, statementList.size());
+                        databases.get(key).insertNoSQL(kvPairs);
                     } else {
                         handleBadRequest(exchange);
                         return;
@@ -229,7 +272,7 @@ public class Coordinator {
                             }
                             // just support simple where now
                             Expression where = update.getWhere();
-                            databases.get(key).update(cols, values, where.toString());
+                            databases.get(key).updateSQL(cols, values, where.toString());
                         } else {
                             handleBadRequest(exchange, "invalid update statement");
                             return;
@@ -275,7 +318,7 @@ public class Coordinator {
                             }
                             // just support simple where now
                             Expression where = delete.getWhere();
-                            databases.get(key).delete(where.toString());
+                            databases.get(key).deleteSQL(where.toString());
                         } else {
                             handleBadRequest(exchange);
                             return;

@@ -19,12 +19,14 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         this.columns = columns;
         // create csv header with column names
         try {
-            FileWriter fileWriter = new FileWriter(csvFileName);
-            try (BufferedWriter writer = new BufferedWriter(fileWriter)) {
-                String header = String.join(",", columns);
-                writer.write(header);
+            if (columns != null) {
+                FileWriter fileWriter = new FileWriter(csvFileName);
+                try (BufferedWriter writer = new BufferedWriter(fileWriter)) {
+                    String header = String.join(",", columns);
+                    writer.write(header);
+                }
             }
-
+            // if NoSQL, columns == null, no need to write header (schema-less)
         } catch (IOException e) {
             System.out.println("Error creating csv file");
             e.printStackTrace();
@@ -61,7 +63,7 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     }
 
     @Override
-    public void insert(List<String> insertColumns, List<String> values) throws RemoteException {
+    public void insertSQL(List<String> insertColumns, List<String> values) throws RemoteException {
         // write to csv file
         StringBuilder csvRow = new StringBuilder();
         for (String column : this.columns) {
@@ -155,12 +157,41 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     }
 
     @Override
-    public void update(List<String> columns, List<String> values, String[] where) throws RemoteException {
+    public void updateSQL(List<String> columns, List<String> values, String[] where) throws RemoteException {
         updateHelper(columns, values, where, true);
     }
 
     @Override
-    public void delete(String[] where) throws RemoteException {
+    public void deleteSQL(String[] where) throws RemoteException {
         updateHelper(new ArrayList<>(), new ArrayList<>(), where, false);
+    }
+
+    @Override
+    public void insertNoSQL(List<String> kvPairs) throws RemoteException {
+        // [key1, value1, key2, value2, ...]
+        StringBuilder csvRow = new StringBuilder();
+        for (int i = 0; i < kvPairs.size(); i += 2) {
+            csvRow.append(kvPairs.get(i)).append(",").append(kvPairs.get(i + 1)).append(",");
+        }
+        try {
+            FileWriter fileWriter = new FileWriter(csvFileName, true);
+            try (BufferedWriter writer = new BufferedWriter(fileWriter)) {
+                writer.write(csvRow.toString());
+                writer.newLine();
+            }
+        } catch (IOException e) {
+            System.out.println("Error writing to csv file");
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void updateNoSQL(List<String> columns, List<String> values, String[] where) throws RemoteException {
+
+    }
+
+    @Override
+    public void deleteNoSQL(String[] where) throws RemoteException {
+
     }
 }
