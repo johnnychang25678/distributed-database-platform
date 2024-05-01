@@ -22,13 +22,10 @@ public class DatabaseNodeClient {
     private Map<Integer, List<DatabaseNodeReplica>> reps = new HashMap<>();
     // for testing
     public void stopReplica(int partitionId, int replicaId) {
-        System.out.println("Stopping replica " + partitionId + "-" + replicaId);
         try {
             DatabaseNodeReplica replica = reps.get(partitionId).get(replicaId);
             // boolean r = UnicastRemoteObject.unexportObject(replica, true);
-            // System.out.println("Unexported: " + r + " " + replica.getTableName());
             Registry registry = LocateRegistry.getRegistry(1099);
-            System.out.println("Unbinding replica " + replica.getTableName());
             registry.unbind(replica.getTableName());
         } catch (RemoteException | NotBoundException e) {
             e.printStackTrace();
@@ -69,7 +66,6 @@ public class DatabaseNodeClient {
                     // table-DBType-partitionId-replicaId
                     String uniqueName = tableName + "-" + this.dbType + "-" + i + "-" + j;
                     DatabaseNodeReplica dbReplica = new DatabaseNodeReplica(uniqueName, columns);
-                    // System.out.println("Binding replica " + uniqueName);
                     registry.rebind(uniqueName, dbReplica);
                     replicas.add(dbReplica);
                 }
@@ -111,20 +107,17 @@ public class DatabaseNodeClient {
                 for (List<DatabaseNodeReplica> replicas : reps.values()) {
                     for (DatabaseNodeReplica replica : replicas) {
                         try {
-                            // System.out.println("Checking replica: " + replica.getTableName() + " heartbeat");
                             DatabaseNodeInterface stub = getReplicaStub(replica.getTableName()); // this can throw
                             if (stub == null) {
                                 replica.setServerAlive(false);
                                 continue;
                             }
                             if (!stub.heartbeatRequest()){
-                                // System.out.println("Replica " + replica.getTableName() + " is not alive");
                                 replica.setServerAlive(false);
                             } else {
                                 replica.setServerAlive(true);
                             }
                         } catch (RemoteException | NotBoundException e) {
-                            // System.out.println("Error checking replica's heartbeat, setting alive to false...");
                             replica.setServerAlive(false);
                         }
                     }
@@ -149,13 +142,11 @@ public class DatabaseNodeClient {
             // insert by key % numPartitions
             int partitionId = Integer.parseInt(values.get(0)) % this.numPartitions;
             checkAlive(partitionId);
-            // System.out.println("Inserting into partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     stub.insertSQL(columns, values);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error inserting into replica");
                     e.printStackTrace();
                 }
             }
@@ -181,20 +172,17 @@ public class DatabaseNodeClient {
                 for (String col : rearrangedColumns.get(i)) {
                     rearrangedValues.add(kvMap.get(col));
                 }
-                // System.out.println("Inserting into partition " + i);
                 for (DatabaseNodeReplica replica : reps.get(i)) {
                     try {
                         DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                         stub.insertSQL(rearrangedColumns.get(i), rearrangedValues);
                     } catch (RemoteException | NotBoundException e) {
-                        System.out.println("RMI error inserting into replica");
                         e.printStackTrace();
                     }
                 }
             }
         } else if (this.partitionType.equals("none")) {
             // insert into all replicas
-            // System.out.println("Inserting into replicas");
             int partitionId = 0;
             checkAlive(partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
@@ -206,7 +194,6 @@ public class DatabaseNodeClient {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     stub.insertSQL(columns, values);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error inserting into replica");
                     e.printStackTrace();
                 }
             }
@@ -219,20 +206,17 @@ public class DatabaseNodeClient {
             // example [id, 1, name, "John"]
             int partitionId = Integer.parseInt(kvPairs.get(1)) % this.numPartitions;
             checkAlive(partitionId);
-            // System.out.println("Inserting into partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     List<String> serializableList = new ArrayList<>(kvPairs);
                     stub.insertNoSQL(serializableList);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error inserting into replica");
                     e.printStackTrace();
                 }
             }
         } else if (this.partitionType.equals("none")) {
             // insert into all replicas
-            // System.out.println("Inserting into replicas");
             int partitionId = 0;
             checkAlive(partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
@@ -241,7 +225,6 @@ public class DatabaseNodeClient {
                     List<String> serializableList = new ArrayList<>(kvPairs);
                     stub.insertNoSQL(serializableList);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error inserting into replica");
                     e.printStackTrace();
                 }
             }
@@ -251,7 +234,6 @@ public class DatabaseNodeClient {
     public String selectSQL() {
         if (this.partitionType.equals("horizontal") || this.partitionType.equals("vertical")) {
             // read from all partitions and aggregate
-            // System.out.println("Selecting from replicas");
             List<String> resultList = new ArrayList<>();
             try {
                 if (this.partitionType.equals("horizontal")) {
@@ -292,14 +274,12 @@ public class DatabaseNodeClient {
                     }
                 }
             } catch (RemoteException | NotBoundException e) {
-                System.out.println("RMI error selecting from replica");
                 e.printStackTrace();
             }
             // convert the result array to a string with newlines
             return String.join("", resultList);
         } else if (this.partitionType.equals("none")) {
             // read from first replica
-            // System.out.println("Selecting from replicas");
             try {
                 // only one partition
                 for (DatabaseNodeReplica replica : reps.get(0)) {
@@ -309,7 +289,6 @@ public class DatabaseNodeClient {
                     }
                 }
             } catch (RemoteException | NotBoundException e) {
-                System.out.println("RMI error selecting from replica");
                 e.printStackTrace();
             }
         }
@@ -318,7 +297,6 @@ public class DatabaseNodeClient {
     public String selectNoSQL() {
         if (this.partitionType.equals("horizontal")){
             // read from all partitions and aggregate
-            // System.out.println("Selecting from replicas");
             List<String> resultList = new ArrayList<>();
             try {
                 for (int i = 0; i < numPartitions; i++) {
@@ -332,14 +310,12 @@ public class DatabaseNodeClient {
                     }
                 }
             } catch (RemoteException | NotBoundException e) {
-                System.out.println("RMI error selecting from replica");
                 e.printStackTrace();
             }
             // convert the result array to a string with newlines
             return String.join("", resultList);
         } else if (this.partitionType.equals("none")) {
             // read from first replica
-            // System.out.println("Selecting from replicas");
             try {
                 for (DatabaseNodeReplica replica : reps.get(0)) {
                     if (replica.isServerAlive()) {
@@ -348,7 +324,6 @@ public class DatabaseNodeClient {
                     }
                 }
             } catch (RemoteException | NotBoundException e) {
-                System.out.println("RMI error selecting from replica");
                 e.printStackTrace();
             }
         }
@@ -364,7 +339,6 @@ public class DatabaseNodeClient {
             // need to be WHERE id = xxx to delete by key
             int partitionId = Integer.parseInt(whereArr[1]) % this.numPartitions;
             checkAlive(partitionId);
-            // System.out.println("Updating partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     if (!replica.isServerAlive()) {
@@ -376,7 +350,6 @@ public class DatabaseNodeClient {
                     List<String> serializableValues = new ArrayList<>(values);
                     stub.updateSQL(serializableColumns, serializableValues, whereArr);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error updating replica");
                     e.printStackTrace();
                 }
             }
@@ -386,7 +359,6 @@ public class DatabaseNodeClient {
             int partitionId = columnToPartition.get(whereArr[0]);
             checkAlive(partitionId);
             // should locate the partition by the column in the where clause
-            // System.out.println("Updating partition " + partitionId);
             // update all the replicas in the partition
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
@@ -395,13 +367,11 @@ public class DatabaseNodeClient {
                     List<String> serializableValues = new ArrayList<>(values);
                     stub.updateSQL(serializableColumns, serializableValues, whereArr);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error updating replica");
                     e.printStackTrace();
                 }
             }
         } else if (this.partitionType.equals("none")) {
             // update all replicas
-            // System.out.println("Updating replicas");
             int partitionId = 0;
             checkAlive(partitionId);
             for (DatabaseNodeReplica replica : reps.get(0)) {
@@ -413,7 +383,6 @@ public class DatabaseNodeClient {
                     List<String> serializableValues = new ArrayList<>(values);
                     stub.updateSQL(serializableColumns, serializableValues, whereArr);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error updating replica");
                     e.printStackTrace();
                 }
             }
@@ -426,7 +395,6 @@ public class DatabaseNodeClient {
             // need to be WHERE id = xxx to update by key
             int partitionId = Integer.parseInt(where.get(1)) % this.numPartitions;
             checkAlive(partitionId);
-            // System.out.println("Updating partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
@@ -434,13 +402,11 @@ public class DatabaseNodeClient {
                     List<String> serializableWhere = new ArrayList<>(where);
                     stub.updateNoSQL(serializableList, serializableWhere);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error updating replica");
                     e.printStackTrace();
                 }
             }
         } else if (this.partitionType.equals("none")) {
             // update all replicas
-            // System.out.println("Updating replicas");
             int partitionId = 0;
             checkAlive(partitionId);
             for (DatabaseNodeReplica replica : reps.get(0)) {
@@ -450,7 +416,6 @@ public class DatabaseNodeClient {
                     List<String> serializableWhere = new ArrayList<>(where);
                     stub.updateNoSQL(serializableList, serializableWhere);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error updating replica");
                     e.printStackTrace();
                 }
             }
@@ -465,20 +430,17 @@ public class DatabaseNodeClient {
             // need to be WHERE id = xxx to delete by key
             int partitionId = Integer.parseInt(whereArr[1]) % this.numPartitions;
             checkAlive(partitionId);
-            // System.out.println("Deleting from partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     stub.deleteSQL(whereArr);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error deleting from replica");
                     e.printStackTrace();
                 }
             }
         } else if (this.partitionType.equals("vertical")) {
             int partitionId = columnToPartition.get(whereArr[0]);
             checkAlive(partitionId);
-            // System.out.println("Deleting from partition " + partitionId);
             // delete from all replicas in the partition
             // should delete the same rows from all partitions
             List<Integer> deletedRows = new ArrayList<>();
@@ -491,7 +453,6 @@ public class DatabaseNodeClient {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     deletedRows = stub.deleteSQL(whereArr);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error deleting from replica");
                     e.printStackTrace();
                 }
             }
@@ -505,14 +466,12 @@ public class DatabaseNodeClient {
                         DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                         stub.deleteByRowSQL(deletedRows);
                     } catch (RemoteException | NotBoundException e) {
-                        System.out.println("RMI error deleting from replica");
                         e.printStackTrace();
                     }
                 }
             }
         } else if (this.partitionType.equals("none")) {
             // delete from all replicas
-            // System.out.println("Deleting from replicas");
             int partitionId = 0;
             checkAlive(partitionId);
             for (DatabaseNodeReplica replica : reps.get(0)) {
@@ -520,7 +479,6 @@ public class DatabaseNodeClient {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     stub.deleteSQL(whereArr);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error deleting from replica");
                     e.printStackTrace();
                 }
             }
@@ -533,20 +491,17 @@ public class DatabaseNodeClient {
             // need to be WHERE id = xxx to delete by key
             int partitionId = Integer.parseInt(where.get(1)) % this.numPartitions;
             checkAlive(partitionId);
-            // System.out.println("Deleting from partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     List<String> serializableWhere = new ArrayList<>(where);
                     stub.deleteNoSQL(serializableWhere);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error deleting from replica");
                     e.printStackTrace();
                 }
             }
         } else if (this.partitionType.equals("none")) {
             // delete from all replicas
-            // System.out.println("Deleting from replicas");
             int partitionId = 0;
             checkAlive(partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
@@ -555,7 +510,6 @@ public class DatabaseNodeClient {
                     List<String> serializableWhere = new ArrayList<>(where);
                     stub.deleteNoSQL(serializableWhere);
                 } catch (RemoteException | NotBoundException e) {
-                    System.out.println("RMI error deleting from replica");
                     e.printStackTrace();
                 }
             }

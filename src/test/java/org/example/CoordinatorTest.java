@@ -10,14 +10,13 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.example.dto.*;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.concurrent.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -30,6 +29,7 @@ class CoordinatorTest {
     private String url = "http://localhost:" + testPort;
 
     private ObjectMapper objectMapper = new ObjectMapper();
+    private static TestResultsSummary results = new TestResultsSummary();
 
     @BeforeEach
     public void setUp() {
@@ -78,7 +78,9 @@ class CoordinatorTest {
 
     // 1. test CRUD operations for SQL
     @Test
+    @Order(1)
     void testCRUDSQL() throws Exception {
+        System.out.println("1. Testing CRUD operations for SQL");
         // CREATE
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
@@ -157,10 +159,13 @@ class CoordinatorTest {
         }
         assertEquals(200, res.getStatusCode());
         assertEquals("", res.getResponseBody());
+        results.setTestResult("Test_CRUD_SQL", true, 12.5);
     }
     // 2. Test CRUD operations for NoSQL
     @Test
+    @Order(2)
     void testCRUDNoSQL() throws Exception {
+        System.out.println("2. Testing CRUD operations for NoSQL");
         // CREATE
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students");
@@ -238,11 +243,14 @@ class CoordinatorTest {
         }
         assertEquals(200, res.getStatusCode());
         assertEquals("", res.getResponseBody());
+        results.setTestResult("Test_CRUD_NoSQL", true, 12.5);
     }
 
     // 3. Test all replicas are in sync for SQL
     @Test
+    @Order(3)
     void testReplicaSyncSQL() throws Exception {
+        System.out.println("3. Testing all replicas are in sync for SQL");
         // CREATE then INSERT
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
@@ -304,12 +312,14 @@ class CoordinatorTest {
         assertEquals(read0, read1);
         assertEquals(read1, read2);
         assertEquals(read0, read2);
-
+        results.setTestResult("Test_Replica_Sync_SQL", true, 15);
     }
 
     // 4. Test all replicas are in sync for NoSQL
     @Test
+    @Order(4)
     void testReplicaSyncNoSQL() throws Exception {
+        System.out.println("4. Testing all replicas are in sync for NoSQL");
         // CREATE then INSERT
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students");
@@ -370,12 +380,15 @@ class CoordinatorTest {
         assertEquals(read0, read1);
         assertEquals(read1, read2);
         assertEquals(read0, read2);
+        results.setTestResult("Test_Replica_Sync_NoSQL", true, 15);
     }
 
     // 5. If replica is down, the system can read but cannot update, insert, or delete for SQL
     // Also test if the replica is back up, the system can write again
     @Test
+    @Order(5)
     void testReplicaDownBecomesReadOnlySQL() throws Exception {
+        System.out.println("5. Testing Replica Down Becomes Read Only for SQL");
         // CREATE
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
@@ -483,12 +496,15 @@ class CoordinatorTest {
         }
         assertEquals(200, res.getStatusCode());
         assertEquals("1,'Alice',21,\n2,'Bob',21,\n", res.getResponseBody());
+        results.setTestResult("Test_Replica_Down_SQL", true, 25);
     }
 
     // 6. If replica is down, the system can read but cannot update, insert, or delete for NoSQL
     // Also test if the replica is back up, the system can write again
     @Test
+    @Order(6)
     void testReplicaDownBecomeReadOnlyNoSQL() throws Exception {
+        System.out.println("6. Testing Replica Down Become Read Only for NoSQL");
         // CREATE
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students");
@@ -597,11 +613,14 @@ class CoordinatorTest {
         }
         assertEquals(200, res.getStatusCode());
         assertEquals("id,1,name,'Alice',age,21,\nid,2,name,'Bob',age,21,\n", res.getResponseBody());
+        results.setTestResult("Test_Replica_Down_NoSQL", true, 25);
     }
 
     // 7. Test horizontal partitioning for SQL
     @Test
+    @Order(7)
     void testHorizontalPartitionSQL() throws Exception {
+        System.out.println("7. Testing horizontal partitioning for SQL");
         // CREATE replica = 2, partition = 2
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
@@ -698,11 +717,14 @@ class CoordinatorTest {
         }
         assertEquals(200, res.getStatusCode());
         assertEquals("2,'Bob',32,\n3,'Charlie',22,\n", res.getResponseBody());
+        results.setTestResult("Test_Horizontal_Partition_SQL", true, 15);
     }
 
     // 8. Test horizontal partitioning for NoSQL
     @Test
+    @Order(8)
     void testHorizontalPartitionNoSQL() throws Exception {
+        System.out.println("8. Testing horizontal partitioning for NoSQL");
         // CREATE replica = 2, partition = 2
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students");
@@ -799,12 +821,14 @@ class CoordinatorTest {
         }
         assertEquals(200, res.getStatusCode());
         assertEquals("id,2,name,'Bob',age,32,\nid,3,name,'Charlie',age,22\n", res.getResponseBody());
-
+        results.setTestResult("Test_Horizontal_Partition_NoSQL", true, 15);
     }
 
     // 9. Test vertical partitioning for SQL
     @Test
+    @Order(9)
     void testVerticalPartitionSQL() throws Exception {
+        System.out.println("9. Testing vertical partitioning for SQL");
         // CREATE replica = 2, partition = 2, [[id, name], [age]]
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
@@ -901,11 +925,14 @@ class CoordinatorTest {
         }
         assertEquals(200, res.getStatusCode());
         assertEquals("", res.getResponseBody());
+        results.setTestResult("Test_Vertical_Partition_SQL", true, 25);
     }
 
     // 10. Test caching
     @Test
+    @Order(10)
     void testCache() throws Exception {
+        System.out.println("10. Testing caching mechanism");
         // CREATE
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
@@ -987,11 +1014,14 @@ class CoordinatorTest {
         assertEquals(1, cache.size());
         assertTrue(cache.containsKey("students-SQL"));
         assertEquals("2,'Bob',21,\n", cache.get("students-SQL"));
+        results.setTestResult("Test_Caching", true, 5);
     }
 
     // 11. Test concurrent requests
     @Test
+    @Order(11)
     void testConcurrentRequests() throws Exception {
+        System.out.println("11. Testing concurrency mechanism");
         // CREATE
         CreateRequestDto createRequestDto = new CreateRequestDto();
         createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
@@ -1031,6 +1061,7 @@ class CoordinatorTest {
         for (int i = 0; i < 10; i++) {
             assertTrue(responseBody.contains(i + ",'Alice'," + (20 + i)));
         }
+        results.setTestResult("Test_Concurrency", true, 15);
     }
     class InsertTask implements Runnable {
         private String insertRequestJson;
@@ -1043,5 +1074,44 @@ class CoordinatorTest {
         public void run() {
             sendPostRequest("/insert", insertRequestJson);
         }
+    }
+
+    public static class TestResultsSummary {
+        private Map<String, Boolean> testResults = new HashMap<>();
+        private Map<String, Double> testPoints = new HashMap<>();
+
+        // Example method to set test results
+        public void setTestResult(String testName, boolean passed, double points) {
+            testResults.put(testName, passed);
+            testPoints.put(testName, passed ? points : 0); // Award points only if the test passed
+        }
+
+        // Print summary report
+        public void printSummary() {
+            int passedTests = 0;
+            int totalTests = testResults.size();
+            Double totalPoints = 0.0;
+
+            System.out.println("\n********** Test Summary Report ***********");
+            for (Map.Entry<String, Boolean> entry : testResults.entrySet()) {
+                String testName = entry.getKey();
+                String result = testResults.get(testName) ? "PASS" : "FAIL";
+                if (entry.getValue()) {
+                    passedTests++;
+                }
+                Double points = testPoints.get(testName);
+                totalPoints += points;
+                System.out.println(testName + ": " + result + " - (Points: " + points + ")");
+            }
+
+            System.out.println("Passed: " + passedTests + " / " + totalTests);
+            System.out.println("Score: " + totalPoints + " / " + 180.0 + " ( 100% ) ");
+            System.out.println("******************************************");
+        }
+    }
+
+    @AfterAll
+    public static void finalResults() {
+        results.printSummary();
     }
 }

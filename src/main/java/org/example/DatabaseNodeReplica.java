@@ -46,7 +46,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 file.createNewFile();
             }
         } catch (IOException e) {
-            System.out.println("Error creating csv file");
             e.printStackTrace();
         }
     }
@@ -61,7 +60,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         try {
             return readAll(true);
         } catch (IOException e) {
-            System.out.println("Error reading from csv file");
             e.printStackTrace();
         }
         return "";
@@ -72,7 +70,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         try {
             return readAll(false);
         } catch (IOException e) {
-            System.out.println("Error reading from csv file");
             e.printStackTrace();
         }
         return "";
@@ -91,7 +88,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 data.append(line).append("\n");
             }
         } catch (IOException e) {
-            System.out.println("Error reading from csv file");
             e.printStackTrace();
         } finally {
             rwLock.readLock().unlock();
@@ -117,7 +113,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 writer.write(csvRow.toString());
             }
         } catch (IOException e) {
-            System.out.println("Error writing to csv file");
             e.printStackTrace();
         } finally {
             rwLock.writeLock().unlock();
@@ -125,8 +120,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     }
 
     private List<Integer> updateSQLHelper(List<String> columns, List<String> values, String[] where, boolean isUpdate) {
-//        System.out.println("*********** updateHelper");
-//        System.out.println("columns: " + columns + " values: " + values + " where: " + Arrays.toString(where) + " isUpdate: " + isUpdate);
         // isUpdate is to differentiate between update and delete
         rwLock.writeLock().lock();
         List<Integer> updatedRows = new ArrayList<>();
@@ -148,7 +141,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                     }
                 }
                 if (whereIndex == -1) {
-                    System.out.println("Where column not found");
                     tempFile.delete();
                     return new ArrayList<>();
                 }
@@ -184,7 +176,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 }
             }
             if (!updated) {
-                System.out.println("No rows updated");
                 // delete temp file
                 tempFile.delete();
             }
@@ -192,13 +183,12 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
             File originalFile = new File(csvFileName);
             if (originalFile.delete()) {
                 if (!tempFile.renameTo(originalFile)) {
-                    System.out.println("Error renaming temp file");
+                    //System.out.println("Error renaming temp file");
                 }
             } else {
-                System.out.println("Error deleting original file");
+                //System.out.println("Error deleting original file");
             }
         } catch (IOException e) {
-            System.out.println("Error updating csv file");
             e.printStackTrace();
         } finally {
             rwLock.writeLock().unlock();
@@ -243,20 +233,18 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 }
             }
             if (!deleted) {
-                System.out.println("No rows deleted");
                 tempFile.delete();
                 return;
             }
             File originalFile = new File(csvFileName);
             if (originalFile.delete()) {
                 if (!tempFile.renameTo(originalFile)) {
-                    System.out.println("Error renaming temp file");
+                    //System.out.println("Error renaming temp file");
                 }
             } else {
-                System.out.println("Error deleting original file");
+                //System.out.println("Error deleting original file");
             }
         } catch (IOException e) {
-            System.out.println("Error deleting from csv file");
             e.printStackTrace();
         } finally {
             rwLock.writeLock().unlock();
@@ -278,7 +266,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 writer.newLine();
             }
         } catch (IOException e) {
-            System.out.println("Error writing to csv file");
             e.printStackTrace();
         } finally {
             rwLock.writeLock().unlock();
@@ -298,7 +285,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 String line;
                 while ((line = reader.readLine()) != null) {
                     String[] row = line.split(","); // key, value, key, value
-                    // System.out.println("*************" + Arrays.toString(row) + "*************");
                     for (int i = 0; i < row.length; i += 2) {
                         String key = row[i];
                         if (key.equals(where.get(0)) && row[i + 1].equals(where.get(1))) {
@@ -321,20 +307,18 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 }
             }
             if (!updated) {
-                System.out.println("No rows updated");
                 tempFile.delete();
                 return;
             }
             File originalFile = new File(csvFileName);
             if (originalFile.delete()) {
                 if (!tempFile.renameTo(originalFile)) {
-                    System.out.println("Error renaming temp file");
+                    //System.out.println("Error renaming temp file");
                 }
             } else {
-                System.out.println("Error deleting original file");
+                //System.out.println("Error deleting original file");
             }
         } catch (IOException e) {
-            System.out.println("Error updating csv file");
             e.printStackTrace();
         } finally {
             rwLock.writeLock().unlock();
@@ -370,20 +354,18 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 }
             }
             if (!deleted) {
-                System.out.println("No rows deleted");
                 tempFile.delete();
                 return;
             }
             File originalFile = new File(csvFileName);
             if (originalFile.delete()) {
                 if (!tempFile.renameTo(originalFile)) {
-                    System.out.println("Error renaming temp file");
+                    //System.out.println("Error renaming temp file");
                 }
             } else {
-                System.out.println("Error deleting original file");
+                //System.out.println("Error deleting original file");
             }
         } catch (IOException e) {
-            System.out.println("Error deleting from csv file");
             e.printStackTrace();
         } finally {
             rwLock.writeLock().unlock();

@@ -79,21 +79,17 @@ public class Coordinator {
         server.setExecutor(Executors.newCachedThreadPool()); // to avoid creating and destroying thread every request
         server.start();
         registry = LocateRegistry.createRegistry(1099); // for RMI
-        System.out.println("Coordinator server started on port " + port);
+
     }
 
     // for test
     public void stop() {
-        System.out.println("Stopping Coordinator server...");
         server.stop(1);
         try {
-            System.out.println("Stopping RMI registry...");
             UnicastRemoteObject.unexportObject(registry, true);
         } catch (NoSuchObjectException e) {
-            System.out.println("Error stopping RMI registry");
             e.printStackTrace();
         }
-        System.out.println("Coordinator server stopped!");
     }
 
 
@@ -119,7 +115,6 @@ public class Coordinator {
                     if (databaseType.equals("SQL")) {
                         // get the statement from the request body
                         Statement statement = CCJSqlParserUtil.parse(statementString);
-                        System.out.println(statementString);
                         if (statement instanceof CreateTable) {
                             CreateTable create = (CreateTable) statement;
                             String tableName = create.getTable().getName();
@@ -189,7 +184,6 @@ public class Coordinator {
                     if (databaseType.equals("SQL")) {
                         // get the statement from the request body
                         String statementString = insertRequestDto.getStatement();
-                        System.out.println(statementString);
                         Statement statement = CCJSqlParserUtil.parse(statementString);
                         // check if the statement is an insert statement
                         if (statement instanceof Insert) {
@@ -219,7 +213,6 @@ public class Coordinator {
                         // handle NoSQL
                         // INSERT key1 value1 key2 value2
                         String statementString = insertRequestDto.getStatement();
-                        System.out.println(statementString);
                         List<String> statementList = Arrays.asList(statementString.split(" "));
                         String insert = statementList.get(0);
                         if (!insert.equals("INSERT")) {
@@ -270,7 +263,6 @@ public class Coordinator {
                     if (databaseType.equals("SQL")) {
                         // get the statement from the request body
                         String statementString = selectRequestDto.getStatement();
-                        System.out.println(statementString);
                         Statement statement = CCJSqlParserUtil.parse(statementString);
                         // check if the statement is a select statement
                         if (statement instanceof PlainSelect) {
@@ -294,7 +286,6 @@ public class Coordinator {
                         // handle NoSQL
                         // SELECT Users (just support select all for now)
                         String statementString = selectRequestDto.getStatement();
-                        System.out.println(statementString);
                         String[] split = statementString.split(" ");
                         if (split.length != 2) {
                             handleBadRequest(exchange, "invalid select statement");
@@ -334,7 +325,6 @@ public class Coordinator {
                     if (databaseType.equals("SQL")) {
                         // get the statement from the request body
                         String statementString = updateRequestDto.getStatement();
-                        System.out.println(statementString);
                         Statement statement = CCJSqlParserUtil.parse(statementString);
                         // check if the statement is an update statement
                         if (statement instanceof Update) {
@@ -365,7 +355,6 @@ public class Coordinator {
                         // handle NoSQL
                         // UPDATE Users key1 value1 key2 value2 WHERE key3 value3
                         String statementString = updateRequestDto.getStatement();
-                        System.out.println(statementString);
                         List<String> statementList = Arrays.asList(statementString.split(" "));
                         String update = statementList.get(0);
                         if (!update.equals("UPDATE")) {
@@ -424,7 +413,6 @@ public class Coordinator {
                     if (databaseType.equals("SQL")) {
                         // get the statement from the request body
                         String statementString = deleteRequestDto.getStatement();
-                        System.out.println(statementString);
                         Statement statement = CCJSqlParserUtil.parse(statementString);
                         // check if the statement is an update statement
                         if (statement instanceof Delete) {
@@ -448,7 +436,6 @@ public class Coordinator {
                         // handle NoSQL
                         // DELETE Users WHERE key value
                         String statementString = deleteRequestDto.getStatement();
-                        System.out.println(statementString);
                         List<String> statementList = Arrays.asList(statementString.split(" "));
                         String delete = statementList.get(0);
                         if (!delete.equals("DELETE")) {
