@@ -383,6 +383,7 @@ class CoordinatorTest {
     }
 
     // 5. If replica is down, the system can read but cannot update, insert, or delete for SQL
+    // Also test if the replica is back up, the system can write again
     @Test
     void testReplicaDownBecomesReadOnlySQL() throws Exception {
         // CREATE
@@ -466,9 +467,36 @@ class CoordinatorTest {
         }
         assertEquals(200, res.getStatusCode());
         assertEquals("1,'Alice',20,\n", res.getResponseBody());
+
+        // bring replica back up
+        dbClient.startReplica(0, 0);
+        // sleep for 3 seconds to allow heartbeat to detect replica is up
+        Thread.sleep(3000);
+        // should be able to write
+        res = sendPostRequest("/update", updateRequestJson);
+        if (res == null) {
+            throw new Exception("Error in update request");
+        }
+        assertEquals(200, res.getStatusCode());
+
+        // should be able to insert
+        res = sendPostRequest("/insert", insertRequestJson);
+        if (res == null) {
+            throw new Exception("Error in insert request");
+        }
+        assertEquals(200, res.getStatusCode());
+
+        // read to check if update and insert worked
+        res = sendPostRequest("/select", selectRequestJson);
+        if (res == null) {
+            throw new Exception("Error in select request");
+        }
+        assertEquals(200, res.getStatusCode());
+        assertEquals("1,'Alice',21,\n2,'Bob',21,\n", res.getResponseBody());
     }
 
     // 6. If replica is down, the system can read but cannot update, insert, or delete for NoSQL
+    // Also test if the replica is back up, the system can write again
     @Test
     void testReplicaDownBecomeReadOnlyNoSQL() throws Exception {
         // CREATE
@@ -553,6 +581,32 @@ class CoordinatorTest {
         }
         assertEquals(200, res.getStatusCode());
         assertEquals("id,1,name,'Alice',age,20,\n", res.getResponseBody());
+
+        // bring replica back up
+        dbClient.startReplica(0, 0);
+        // sleep for 3 seconds to allow heartbeat to detect replica is up
+        Thread.sleep(3000);
+        // should be able to write
+        res = sendPostRequest("/update", updateRequestJson);
+        if (res == null) {
+            throw new Exception("Error in update request");
+        }
+        assertEquals(200, res.getStatusCode());
+
+        // should be able to insert
+        res = sendPostRequest("/insert", insertRequestJson);
+        if (res == null) {
+            throw new Exception("Error in insert request");
+        }
+        assertEquals(200, res.getStatusCode());
+
+        // read to check if update and insert worked
+        res = sendPostRequest("/select", selectRequestJson);
+        if (res == null) {
+            throw new Exception("Error in select request");
+        }
+        assertEquals(200, res.getStatusCode());
+        assertEquals("id,1,name,'Alice',age,21,\nid,2,name,'Bob',age,21,\n", res.getResponseBody());
     }
 
     // 7. Test horizontal partitioning for SQL
