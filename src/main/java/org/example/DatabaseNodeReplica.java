@@ -4,13 +4,14 @@ import java.io.*;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 // RMI server implementation, provide service
 public class DatabaseNodeReplica extends UnicastRemoteObject implements DatabaseNodeInterface{
-    // TODO: need to lock file for write operations
+    private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
     private String tableName;
     public String getTableName() {
         return tableName;
@@ -79,6 +80,7 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
 
     private String readAll(boolean skipHeader) throws IOException {
         // return all data as string from csv file
+        rwLock.readLock().lock();
         StringBuilder data = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new FileReader(csvFileName))) {
             if (skipHeader) {
@@ -91,6 +93,8 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         } catch (IOException e) {
             System.out.println("Error reading from csv file");
             e.printStackTrace();
+        } finally {
+            rwLock.readLock().unlock();
         }
         return data.toString();
     }
@@ -98,14 +102,15 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     @Override
     public void insertSQL(List<String> insertColumns, List<String> values) throws RemoteException {
         // write to csv file
+        rwLock.writeLock().lock();
         StringBuilder csvRow = new StringBuilder();
-        for (String column : this.columns) {
-            if (insertColumns.contains(column)) {
-                csvRow.append(values.get(insertColumns.indexOf(column)));
-            }
-            csvRow.append(",");
-        }
         try {
+            for (String column : this.columns) {
+                if (insertColumns.contains(column)) {
+                    csvRow.append(values.get(insertColumns.indexOf(column)));
+                }
+                csvRow.append(",");
+            }
             FileWriter fileWriter = new FileWriter(csvFileName, true);
             try (BufferedWriter writer = new BufferedWriter(fileWriter)) {
                 writer.newLine();
@@ -114,6 +119,8 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         } catch (IOException e) {
             System.out.println("Error writing to csv file");
             e.printStackTrace();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
@@ -121,6 +128,7 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
 //        System.out.println("*********** updateHelper");
 //        System.out.println("columns: " + columns + " values: " + values + " where: " + Arrays.toString(where) + " isUpdate: " + isUpdate);
         // isUpdate is to differentiate between update and delete
+        rwLock.writeLock().lock();
         List<Integer> updatedRows = new ArrayList<>();
         try {
             boolean updated = false;
@@ -192,6 +200,8 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         } catch (IOException e) {
             System.out.println("Error updating csv file");
             e.printStackTrace();
+        } finally {
+            rwLock.writeLock().unlock();
         }
         return updatedRows;
     }
@@ -209,6 +219,7 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     @Override
     public void deleteByRowSQL(List<Integer> rows) {
         // given row numbers, delete rows (for vertical partitioning deletion)
+        rwLock.writeLock().lock();
         boolean deleted = false;
         Collections.sort(rows);
         try {
@@ -247,17 +258,20 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         } catch (IOException e) {
             System.out.println("Error deleting from csv file");
             e.printStackTrace();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
     @Override
     public void insertNoSQL(List<String> kvPairs) throws RemoteException {
         // [key1, value1, key2, value2, ...]
+        rwLock.writeLock().lock();
         StringBuilder csvRow = new StringBuilder();
-        for (int i = 0; i < kvPairs.size(); i += 2) {
-            csvRow.append(kvPairs.get(i)).append(",").append(kvPairs.get(i + 1)).append(",");
-        }
         try {
+            for (int i = 0; i < kvPairs.size(); i += 2) {
+                csvRow.append(kvPairs.get(i)).append(",").append(kvPairs.get(i + 1)).append(",");
+            }
             FileWriter fileWriter = new FileWriter(csvFileName, true);
             try (BufferedWriter writer = new BufferedWriter(fileWriter)) {
                 writer.write(csvRow.toString());
@@ -266,12 +280,15 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         } catch (IOException e) {
             System.out.println("Error writing to csv file");
             e.printStackTrace();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
     @Override
     public void updateNoSQL(List<String> kvPairs, List<String> where) throws RemoteException {
         // update all rows with where condition
+        rwLock.writeLock().lock();
         try {
             boolean updated = false;
             File tempFile = new File("temp-" + csvFileName);
@@ -319,12 +336,15 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         } catch (IOException e) {
             System.out.println("Error updating csv file");
             e.printStackTrace();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
     @Override
     public void deleteNoSQL(List<String> where) throws RemoteException {
         // delete all rows with where condition
+        rwLock.writeLock().lock();
         try {
             boolean deleted = false;
             File tempFile = new File("temp-" + csvFileName);
@@ -365,6 +385,8 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         } catch (IOException e) {
             System.out.println("Error deleting from csv file");
             e.printStackTrace();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 }
