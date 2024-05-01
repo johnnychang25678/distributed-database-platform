@@ -12,12 +12,18 @@ import java.util.List;
 public class DatabaseNodeReplica extends UnicastRemoteObject implements DatabaseNodeInterface{
     // TODO: need to lock file for write operations
     private String tableName;
+    public String getTableName() {
+        return tableName;
+    }
     private List<String> columns;
     private String csvFileName;
 
     private boolean isServerAlive = true;
     public boolean isServerAlive() {
         return isServerAlive;
+    }
+    public void setServerAlive(boolean serverAlive) {
+        isServerAlive = serverAlive;
     }
 
     public DatabaseNodeReplica(String tableName, List<String> columns) throws RemoteException {
@@ -42,8 +48,11 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
             System.out.println("Error creating csv file");
             e.printStackTrace();
         }
+    }
 
-
+    @Override
+    public boolean heartbeatRequest() throws RemoteException {
+        return true;
     }
 
     @Override

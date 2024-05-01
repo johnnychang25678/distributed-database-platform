@@ -76,12 +76,47 @@ public class DatabaseNodeClient {
                 reps.put(i, replicas);
             }
         }
+        this.startHeartbeat();
     }
 
     public List<String> getColumns() {
         return columns;
     }
 
+    public void startHeartbeat() {
+        new Thread(() -> {
+            while (true) {
+                for (List<DatabaseNodeReplica> replicas : reps.values()) {
+                    for (DatabaseNodeReplica replica : replicas) {
+                        try {
+                            if (!replica.isServerAlive()) {
+                                continue;
+                            }
+                            System.out.println("Checking replica: " + replica.getTableName() + " heartbeat");
+                            if (!replica.heartbeatRequest()){
+                                // Set the replica's isAlive status to false
+                                replica.setServerAlive(false);
+                            } else {
+                                // Set the replica's isAlive status to true
+                                replica.setServerAlive(true);
+                            }
+                        } catch (RemoteException e) {
+                            System.out.println("Error checking replica's heartbeat");
+                            e.printStackTrace();
+                            replica.setServerAlive(false);
+                        }
+                    }
+                }
+
+                // Sleep for a while before checking again
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
     public void insertSQL(List<String> columns, List<String> values) {
         System.out.println("columns: " + columns + "values: " + values);
         if (this.partitionType.equals("horizontal")) {
