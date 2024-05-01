@@ -23,6 +23,10 @@ import net.sf.jsqlparser.statement.insert.Insert;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.rmi.NoSuchObjectException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -30,26 +34,55 @@ import java.util.concurrent.Executors;
 public class Coordinator {
     // main method to start the program
     public static void main(String[] args) throws IOException {
+        int serverPort = 8080;
+        if (args.length > 0) {
+            try {
+                serverPort = Integer.parseInt(args[0]);
+            } catch (NumberFormatException e) {
+                System.err.println("Invalid port number provided, using default port " + serverPort);
+            }
+        }
         Coordinator coordinator = new Coordinator();
-        coordinator.run(8080);
+        coordinator.run(serverPort);
     }
 
     private ObjectMapper mapper = new ObjectMapper();
     // tablename-"SQL | NoSQL" -> DatabaseNodeClient
     private Map<String, DatabaseNodeClient> databases = new ConcurrentHashMap<>();
+    private HttpServer server;
+    private Registry registry;
 
-    private void run(int port) throws IOException {
+    public void run(int port) throws IOException {
         // an http server that listens on the specified port
-        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+        server = HttpServer.create(new InetSocketAddress(port), 0);
         // create a new context for the server
         server.createContext("/create", new CreateHandler());
         server.createContext("/insert", new InsertHandler());
         server.createContext("/select", new SelectHandler());
         server.createContext("/update", new UpdateHandler());
         server.createContext("/delete", new DeleteHandler());
+
+        // for test
+        server.createContext("/status", new StatusHandler());
+
         server.setExecutor(Executors.newCachedThreadPool()); // to avoid creating and destroying thread every request
         server.start();
+        registry = LocateRegistry.createRegistry(1099); // for RMI
         System.out.println("Coordinator server started on port " + port);
+    }
+
+    // for test
+    public void stop() {
+        System.out.println("Stopping Coordinator server...");
+        server.stop(1);
+        try {
+            System.out.println("Stopping RMI registry...");
+            UnicastRemoteObject.unexportObject(registry, true);
+        } catch (NoSuchObjectException e) {
+            System.out.println("Error stopping RMI registry");
+            e.printStackTrace();
+        }
+        System.out.println("Coordinator server stopped!");
     }
 
 
@@ -434,6 +467,20 @@ public class Coordinator {
             }
         }
     }
+
+    private class StatusHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    handleResponse(exchange, "ok");
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
     // ****************** helper functions ********************
     private void handleResponse(HttpExchange exchange, String response) throws IOException {
         exchange.getResponseHeaders().add("Content-Type", "application/json");

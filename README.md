@@ -4,14 +4,13 @@ As indicated in the lab writeup, you have an opportunity to design and implement
 
 
 ## How to run
-1. At root, start the server with:
+- To skip test and start server at port 8080: 
 ```
-mvn clean package && mvn exec:java -Dexec.mainClass="org.example.Coordinator"
+mvn clean -DskipTests=true package && mvn exec:java -Dexec.mainClass="org.example.Coordinator"
 ```
-2. At root, start the rmi registry with:
+- To execute test before compile and start server at port 5000:
 ```
-rmiregistry -J-Djava.rmi.server.codebase=file:$(pwd)/target/classes/ -J-Djava.class.path=$(pwd)/target/classes/
-
+mvn clean package && mvn exec:java -Dexec.mainClass="org.example.Coordinator" -Dexec.args="5000"
 ```
 
 
