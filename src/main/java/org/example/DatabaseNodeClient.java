@@ -374,7 +374,9 @@ public class DatabaseNodeClient {
                         throw new CannotWriteException("One of the replicas is down");
                     }
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
-                    stub.updateSQL(columns, values, whereArr);
+                    List<String> serializableColumns = new ArrayList<>(columns);
+                    List<String> serializableValues = new ArrayList<>(values);
+                    stub.updateSQL(serializableColumns, serializableValues, whereArr);
                 } catch (RemoteException | NotBoundException e) {
                     System.out.println("RMI error updating replica");
                     e.printStackTrace();
@@ -391,7 +393,9 @@ public class DatabaseNodeClient {
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
-                    stub.updateSQL(columns, values, whereArr);
+                    List<String> serializableColumns = new ArrayList<>(columns);
+                    List<String> serializableValues = new ArrayList<>(values);
+                    stub.updateSQL(serializableColumns, serializableValues, whereArr);
                 } catch (RemoteException | NotBoundException e) {
                     System.out.println("RMI error updating replica");
                     e.printStackTrace();
@@ -407,7 +411,9 @@ public class DatabaseNodeClient {
                     // where clause is now FirstName = 'John'
                     // convert to ["FirstName", "John"]
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
-                    stub.updateSQL(columns, values, whereArr);
+                    List<String> serializableColumns = new ArrayList<>(columns);
+                    List<String> serializableValues = new ArrayList<>(values);
+                    stub.updateSQL(serializableColumns, serializableValues, whereArr);
                 } catch (RemoteException | NotBoundException e) {
                     System.out.println("RMI error updating replica");
                     e.printStackTrace();

@@ -16,7 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.UnsupportedEncodingException;
-import java.sql.Time;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +37,7 @@ class CoordinatorTest {
             coordinator = new Coordinator();
             try {
                 coordinator.run(testPort);
+                coordinator.deleteCsvFiles(); // remove before tests just in case
             } catch (Exception e) {
                 System.out.println("Test Server failed to start");
                 e.printStackTrace();
@@ -752,13 +753,110 @@ class CoordinatorTest {
             throw new Exception("Error in select request");
         }
         assertEquals(200, res.getStatusCode());
-        assertEquals("id,2,name,'Bob',age,32,\nid,3,name,'Charlie',age,22,\n", res.getResponseBody());
+        assertEquals("id,2,name,'Bob',age,32,\nid,3,name,'Charlie',age,22\n", res.getResponseBody());
 
     }
 
     // 9. Test vertical partitioning for SQL
+    @Test
+    void testVerticalPartitionSQL() throws Exception {
+        // CREATE replica = 2, partition = 2, [[id, name], [age]]
+        CreateRequestDto createRequestDto = new CreateRequestDto();
+        createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
+        createRequestDto.setDatabaseType("SQL");
+        createRequestDto.setReplicaCount(2);
+        createRequestDto.setPartitionType("vertical");
+        createRequestDto.setVerticalPartitionColumns(Arrays.asList(Arrays.asList("id", "name"), Arrays.asList("age")));
+        createRequestDto.setNumPartitions(2); // need to match the size of verticalPartitionColumns
+        String createRequestJson = objectMapper.writeValueAsString(createRequestDto);
+        HttpResponseData res = sendPostRequest("/create", createRequestJson);
+        if (res == null) {
+            throw new Exception("Error in create request");
+        }
+        JsonNode rootNode = objectMapper.readTree(res.getResponseBody());
+        JsonNode messageNode = rootNode.get("message");
+        assertEquals(200, res.getStatusCode());
+        assertNotNull(messageNode);
+        assertEquals("ok", messageNode.asText());
 
-    // 10. Test vertical partitioning for NoSQL
+        // should have 4 csv files with names: students-SQL-0-0.csv, students-SQL-0-1.csv, students-SQL-1-0.csv, students-SQL-1-1.csv
+        List<String> csvFiles = coordinator.listCsvFiles();
+        assertEquals(4, csvFiles.size());
+        assertTrue(csvFiles.contains("students-SQL-0-0.csv"));
+        assertTrue(csvFiles.contains("students-SQL-0-1.csv"));
+        assertTrue(csvFiles.contains("students-SQL-1-0.csv"));
+        assertTrue(csvFiles.contains("students-SQL-1-1.csv"));
 
-    // 11. Test caching
+        // make sure correct columns in each csv file. partion 0 has id, name, partition 1 has age
+        String readPartition0 = coordinator.readFromCsv("students-SQL-0-0.csv");
+        assertEquals("id,name", readPartition0);
+        String readPartition1 = coordinator.readFromCsv("students-SQL-1-0.csv");
+        assertEquals("age", readPartition1);
+
+        // INSERT a data with id, name, age, should be split into 2 csv files
+        InsertRequestDto insertRequestDto = new InsertRequestDto();
+        insertRequestDto.setStatement("INSERT INTO students (id, name, age) VALUES (1, 'Alice', 20)");
+        insertRequestDto.setDatabaseType("SQL");
+        String insertRequestJson = objectMapper.writeValueAsString(insertRequestDto);
+        sendPostRequest("/insert", insertRequestJson);
+
+        // check the csv files
+        readPartition0 = coordinator.readFromCsv("students-SQL-0-0.csv");
+        assertEquals("id,name\n1,'Alice',", readPartition0);
+        readPartition1 = coordinator.readFromCsv("students-SQL-1-0.csv");
+        assertEquals("age\n20,", readPartition1);
+
+        // SELECT should work
+        SelectRequestDto selectRequestDto = new SelectRequestDto();
+        selectRequestDto.setStatement("SELECT * FROM students");
+        selectRequestDto.setDatabaseType("SQL");
+        String selectRequestJson = objectMapper.writeValueAsString(selectRequestDto);
+        res = sendPostRequest("/select", selectRequestJson);
+        if (res == null) {
+            throw new Exception("Error in select request");
+        }
+        assertEquals(200, res.getStatusCode());
+        assertEquals("1,'Alice',20,", res.getResponseBody());
+
+        // UPDATE should work
+        // limitation: can only update the columns in the same partition as the WHERE clause
+        UpdateRequestDto updateRequestDto = new UpdateRequestDto();
+        updateRequestDto.setStatement("UPDATE students SET name = 'Bob' WHERE id = 1");
+        updateRequestDto.setDatabaseType("SQL");
+        String updateRequestJson = objectMapper.writeValueAsString(updateRequestDto);
+        res = sendPostRequest("/update", updateRequestJson);
+        if (res == null) {
+            throw new Exception("Error in update request");
+        }
+        assertEquals(200, res.getStatusCode());
+
+        // check if update worked
+        res = sendPostRequest("/select", selectRequestJson);
+        if (res == null) {
+            throw new Exception("Error in select request");
+        }
+        assertEquals(200, res.getStatusCode());
+        assertEquals("1,'Bob',20,", res.getResponseBody());
+
+        // DELETE should work
+        DeleteRequestDto deleteRequestDto = new DeleteRequestDto();
+        deleteRequestDto.setStatement("DELETE FROM students WHERE id = 1");
+        deleteRequestDto.setDatabaseType("SQL");
+        String deleteRequestJson = objectMapper.writeValueAsString(deleteRequestDto);
+        res = sendPostRequest("/delete", deleteRequestJson);
+        if (res == null) {
+            throw new Exception("Error in delete request");
+        }
+        assertEquals(200, res.getStatusCode());
+
+        // check if delete worked
+        res = sendPostRequest("/select", selectRequestJson);
+        if (res == null) {
+            throw new Exception("Error in select request");
+        }
+        assertEquals(200, res.getStatusCode());
+        assertEquals("", res.getResponseBody());
+    }
+
+    // 10. Test caching
 }

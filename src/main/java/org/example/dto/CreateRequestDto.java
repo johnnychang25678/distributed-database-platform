@@ -38,6 +38,9 @@ public class CreateRequestDto {
         if (partitionType.equals("vertical") && (verticalPartitionColumns == null || verticalPartitionColumns.size() == 0)) {
             throw new IllegalArgumentException("verticalPartitionColumns cannot be null or empty");
         }
+        if (partitionType.equals("vertical") && (numPartitions != verticalPartitionColumns.size())) {
+            throw new IllegalArgumentException("numPartitions must be equal to the number of vertical partitions");
+        }
     }
 
     public String getStatement() {
