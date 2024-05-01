@@ -409,6 +409,9 @@ class CoordinatorTest {
         // sleep for 3 seconds to allow heartbeat to detect replica is down
         Thread.sleep(3000);
         System.out.println("aaaaaaaaaaaaaaaa");
+        dbClient.startReplica(0, 0);
+        Thread.sleep(3000);
+        System.out.println("bbbbbbbbbbbbbbb");
     }
 
     // 6. If replica is down, the system can read but cannot update, insert, or delete for NoSQL
