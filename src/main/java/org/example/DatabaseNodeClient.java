@@ -2,10 +2,13 @@ package org.example;
 
 import org.example.config.PartitionConfig;
 import org.example.config.VerticalPartitionConfig;
+import org.example.exception.CannotWriteException;
 
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.*;
 
 public class DatabaseNodeClient {
@@ -16,11 +19,34 @@ public class DatabaseNodeClient {
     private String partitionType;
     private String dbType;
 
-    // list of RMI servers of replicaCount
-//    private List<DatabaseNodeInterface> replicas = new ArrayList<>();
-
     // partitionId -> list of replicas
     private Map<Integer, List<DatabaseNodeReplica>> reps = new HashMap<>();
+    // for testing
+    public void stopReplica(int partitionId, int replicaId) {
+        System.out.println("Stopping replica " + partitionId + "-" + replicaId);
+        try {
+            DatabaseNodeReplica replica = reps.get(partitionId).get(replicaId);
+            boolean r = UnicastRemoteObject.unexportObject(replica, true);
+            System.out.println("Unexported: " + r + " " + replica.getTableName());
+            Registry registry = LocateRegistry.getRegistry(1099);
+            System.out.println("Unbinding replica " + replica.getTableName());
+            registry.unbind(replica.getTableName());
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        } catch (NotBoundException e) {
+            System.out.println("Replica not bind");
+        }
+    }
+    public void startReplica(int partitionId, int replicaId) {
+        try {
+            DatabaseNodeReplica replica = reps.get(partitionId).get(replicaId);
+            Registry registry = LocateRegistry.getRegistry(1099);
+            registry.rebind(replica.getTableName(), replica);
+            // replica.setServerAlive(true);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+    }
     private Map<String, Integer> columnToPartition = new HashMap<>(); // for vertical partitioning
 
     public DatabaseNodeClient(String tableName, List<String> columns,
@@ -46,6 +72,7 @@ public class DatabaseNodeClient {
                     // table-DBType-partitionId-replicaId
                     String uniqueName = tableName + "-" + this.dbType + "-" + i + "-" + j;
                     DatabaseNodeReplica dbReplica = new DatabaseNodeReplica(uniqueName, columns);
+                    System.out.println("Binding replica " + uniqueName);
                     registry.rebind(uniqueName, dbReplica);
                     replicas.add(dbReplica);
                 }
@@ -87,42 +114,44 @@ public class DatabaseNodeClient {
                 for (List<DatabaseNodeReplica> replicas : reps.values()) {
                     for (DatabaseNodeReplica replica : replicas) {
                         try {
-                            if (!replica.isServerAlive()) {
-                                continue;
-                            }
+                            Registry registry = LocateRegistry.getRegistry(1099);
                             // System.out.println("Checking replica: " + replica.getTableName() + " heartbeat");
-                            if (!replica.heartbeatRequest()){
-                                // Set the replica's isAlive status to false
+                            DatabaseNodeInterface stub = (DatabaseNodeInterface) registry.lookup(replica.getTableName());
+                            if (!stub.heartbeatRequest()){
+                                System.out.println("Replica " + replica.getTableName() + " is not alive");
                                 replica.setServerAlive(false);
                             } else {
-                                // Set the replica's isAlive status to true
+                                System.out.println("Replica " + replica.getTableName() + " is alive");
                                 replica.setServerAlive(true);
                             }
-                        } catch (RemoteException e) {
-                            System.out.println("Error checking replica's heartbeat");
-                            e.printStackTrace();
+                        } catch (RemoteException | NotBoundException e) {
+                            System.out.println("Error checking replica's heartbeat, setting alive to false...");
                             replica.setServerAlive(false);
                         }
                     }
                 }
 
-                // Sleep for a while before checking again
+                // Sleep for 1 sec before checking again
                 try {
-                    Thread.sleep(3000);
+                    Thread.sleep(500);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
         }).start();
     }
-    public void insertSQL(List<String> columns, List<String> values) {
+    public void insertSQL(List<String> columns, List<String> values) throws CannotWriteException {
         System.out.println("columns: " + columns + "values: " + values);
         if (this.partitionType.equals("horizontal")) {
             // insert by key % numPartitions
             int partitionId = Integer.parseInt(values.get(0)) % this.numPartitions;
             System.out.println("Inserting into partition " + partitionId);
-            for (DatabaseNodeInterface replica : reps.get(partitionId)) {
+            for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
+                    if (!replica.isServerAlive()) {
+                        // one of replicas is down, should not able to insert
+                        throw new CannotWriteException("One of the replicas is down");
+                    }
                     replica.insertSQL(columns, values);
                 } catch (RemoteException e) {
                     System.out.println("RMI error inserting into replica");
@@ -148,8 +177,12 @@ public class DatabaseNodeClient {
                     rearrangedValues.add(kvMap.get(col));
                 }
                 System.out.println("Inserting into partition " + i);
-                for (DatabaseNodeInterface replica : reps.get(i)) {
+                for (DatabaseNodeReplica replica : reps.get(i)) {
                     try {
+                        if (!replica.isServerAlive()) {
+                            // one of replicas is down, should not able to insert
+                            throw new CannotWriteException("One of the replicas is down");
+                        }
                         replica.insertSQL(rearrangedColumns.get(i), rearrangedValues);
                     } catch (RemoteException e) {
                         System.out.println("RMI error inserting into replica");
@@ -160,8 +193,12 @@ public class DatabaseNodeClient {
         } else if (this.partitionType.equals("none")) {
             // insert into all replicas
             System.out.println("Inserting into replicas");
-            for (DatabaseNodeInterface replica : reps.get(0)) {
+            for (DatabaseNodeReplica replica : reps.get(0)) {
                 try {
+                    if (!replica.isServerAlive()) {
+                        // one of replicas is down, should not able to insert
+                        throw new CannotWriteException("One of the replicas is down");
+                    }
                     replica.insertSQL(columns, values);
                 } catch (RemoteException e) {
                     System.out.println("RMI error inserting into replica");

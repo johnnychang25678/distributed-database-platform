@@ -54,6 +54,10 @@ public class Coordinator {
     private ObjectMapper mapper = new ObjectMapper();
     // tablename-"SQL | NoSQL" -> DatabaseNodeClient
     private Map<String, DatabaseNodeClient> databases = new ConcurrentHashMap<>();
+    // for test
+    public Map<String, DatabaseNodeClient> getDatabases() {
+        return databases;
+    }
     private HttpServer server;
     private Registry registry;
 

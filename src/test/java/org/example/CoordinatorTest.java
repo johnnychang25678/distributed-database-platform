@@ -16,7 +16,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.UnsupportedEncodingException;
+import java.sql.Time;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -379,6 +381,35 @@ class CoordinatorTest {
     }
 
     // 5. If replica is down, the system can read but cannot update, insert, or delete for SQL
+    @Test
+    void testReplicaDownBecomesReadOnlySQL() throws Exception {
+        // CREATE
+        CreateRequestDto createRequestDto = new CreateRequestDto();
+        createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
+        createRequestDto.setDatabaseType("SQL");
+        createRequestDto.setReplicaCount(3);
+        createRequestDto.setPartitionType("none");
+        createRequestDto.setNumPartitions(1);
+        String createRequestJson = objectMapper.writeValueAsString(createRequestDto);
+        sendPostRequest("/create", createRequestJson);
+
+        // INSERT
+        InsertRequestDto insertRequestDto = new InsertRequestDto();
+        insertRequestDto.setStatement("INSERT INTO students (id, name, age) VALUES (1, 'Alice', 20)");
+        insertRequestDto.setDatabaseType("SQL");
+        String insertRequestJson = objectMapper.writeValueAsString(insertRequestDto);
+        sendPostRequest("/insert", insertRequestJson);
+
+        // students-SQL -> DatabaseNodeClient -> {tableName: list of replicas}
+        Map<String, DatabaseNodeClient> dbs = coordinator.getDatabases();
+        DatabaseNodeClient dbClient = dbs.get("students-SQL");
+
+        // shut down one replica
+        dbClient.stopReplica(0, 0);
+        // sleep for 3 seconds to allow heartbeat to detect replica is down
+        Thread.sleep(3000);
+        System.out.println("aaaaaaaaaaaaaaaa");
+    }
 
     // 6. If replica is down, the system can read but cannot update, insert, or delete for NoSQL
 
