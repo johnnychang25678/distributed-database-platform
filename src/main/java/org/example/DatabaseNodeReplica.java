@@ -299,6 +299,7 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                         }
                     }
                     writer.write(String.join(",", row));
+                    writer.write(",");
                     writer.newLine();
                 }
             }

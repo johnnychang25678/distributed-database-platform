@@ -23,6 +23,8 @@ import net.sf.jsqlparser.statement.insert.Insert;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.rmi.NoSuchObjectException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -105,8 +107,6 @@ public class Coordinator {
                     PartitionConfig partitionConfig = partitionType.equals("horizontal") ?
                             new HorizontalPartitionConfig(numPartitions) : partitionType.equals("vertical") ?
                             new VerticalPartitionConfig(numPartitions, verticalPartitionColumns) : null;
-                    System.out.println(partitionConfig.getPartitionType());
-                    System.out.println(partitionConfig.getNumPartitions());
                     if (databaseType.equals("SQL")) {
                         // get the statement from the request body
                         Statement statement = CCJSqlParserUtil.parse(statementString);
@@ -522,6 +522,24 @@ public class Coordinator {
         public String message;
         public BadRequestResponse(String message) {
             this.message = message;
+        }
+    }
+
+    // for test
+    public void deleteCsvFiles() {
+        Path directory = Paths.get("").toAbsolutePath();
+        try {
+            Files.walkFileTree(directory, new SimpleFileVisitor<Path>() {
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                    if (file.toString().endsWith(".csv")) {
+                        Files.delete(file);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }

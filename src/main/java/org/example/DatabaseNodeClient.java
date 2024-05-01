@@ -30,7 +30,7 @@ public class DatabaseNodeClient {
         this.replicaCount = replicaCount;
 
         this.dbType = columns == null ? "NoSQL" : "SQL";
-        if (this.dbType.equals("NoSQL") && partitionConfig.getPartitionType().equals("vertical")) {
+        if (this.dbType.equals("NoSQL") && partitionConfig != null && partitionConfig.getPartitionType().equals("vertical")) {
             throw new IllegalArgumentException("NoSQL databases cannot have vertical partitioning");
         }
 
@@ -45,7 +45,6 @@ public class DatabaseNodeClient {
                 for (int j = 0; j < replicaCount; j++) {
                     // table-DBType-partitionId-replicaId
                     String uniqueName = tableName + "-" + this.dbType + "-" + i + "-" + j;
-                    System.out.println("Unique name: " + uniqueName);
                     DatabaseNodeReplica dbReplica = new DatabaseNodeReplica(uniqueName, columns);
                     registry.rebind(uniqueName, dbReplica);
                     replicas.add(dbReplica);
@@ -92,7 +91,7 @@ public class DatabaseNodeClient {
                             if (!replica.isServerAlive()) {
                                 continue;
                             }
-                            System.out.println("Checking replica: " + replica.getTableName() + " heartbeat");
+                            // System.out.println("Checking replica: " + replica.getTableName() + " heartbeat");
                             if (!replica.heartbeatRequest()){
                                 // Set the replica's isAlive status to false
                                 replica.setServerAlive(false);
