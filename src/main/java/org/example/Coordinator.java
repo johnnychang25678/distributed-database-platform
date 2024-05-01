@@ -19,6 +19,7 @@ import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.create.table.ColumnDefinition;
 import net.sf.jsqlparser.statement.create.table.CreateTable;
 import net.sf.jsqlparser.statement.insert.Insert;
+import org.example.exception.CannotWriteException;
 
 import java.io.File;
 import java.io.IOException;
@@ -244,6 +245,10 @@ public class Coordinator {
                     e.printStackTrace();
                     handleBadRequest(exchange);
                     return;
+                }
+                catch (CannotWriteException e) {
+                    handleBadRequest(exchange, "database in read-only mode due to failure");
+                    return;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -277,7 +282,7 @@ public class Coordinator {
                             }
                             // will just support select * for now
                             String result = databases.get(key).selectSQL();
-                            handleResponse(exchange, result);
+                            handleResponse(exchange, 200, result);
                         } else {
                             handleBadRequest(exchange, "invalid select statement");
                         }
@@ -299,7 +304,7 @@ public class Coordinator {
                         }
                         // will just support select * for now
                         String result = databases.get(key).selectNoSQL();
-                        handleResponse(exchange, result);
+                        handleResponse(exchange, 200, result);
                     } else {
                         handleBadRequest(exchange);
                     }
@@ -390,6 +395,9 @@ public class Coordinator {
                     e.printStackTrace();
                     handleBadRequest(exchange);
                     return;
+                } catch (CannotWriteException e) {
+                    handleBadRequest(exchange, "database in read-only mode due to failure");
+                    return;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -467,6 +475,9 @@ public class Coordinator {
                     e.printStackTrace();
                     handleBadRequest(exchange);
                     return;
+                } catch (CannotWriteException e) {
+                    handleBadRequest(exchange, "database in read-only mode due to failure");
+                    return;
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -475,12 +486,13 @@ public class Coordinator {
         }
     }
 
+    // just a testing endpoint
     private class StatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("GET".equals(exchange.getRequestMethod())) {
                 try {
-                    handleResponse(exchange, "ok");
+                    handleResponse(exchange, 200, "ok");
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -489,9 +501,9 @@ public class Coordinator {
     }
 
     // ****************** helper functions ********************
-    private void handleResponse(HttpExchange exchange, String response) throws IOException {
+    private void handleResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
         exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(200, response.getBytes().length);
+        exchange.sendResponseHeaders(statusCode, response.getBytes().length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(response.getBytes());
         }
@@ -502,7 +514,7 @@ public class Coordinator {
         exchange.getResponseHeaders().add("Content-Type", "application/json");
         SuccessResponse res = new SuccessResponse("ok");
         String jsonResponse = mapper.writeValueAsString(res);
-        handleResponse(exchange, jsonResponse);
+        handleResponse(exchange, 200, jsonResponse);
     }
 
     private class SuccessResponse{
@@ -516,14 +528,14 @@ public class Coordinator {
         exchange.getResponseHeaders().add("Content-Type", "application/json");
         BadRequestResponse res = new BadRequestResponse("invalid post body");
         String jsonResponse = mapper.writeValueAsString(res);
-        handleResponse(exchange, jsonResponse);
+        handleResponse(exchange, 400, jsonResponse);
     }
     private void handleBadRequest(HttpExchange exchange, String body) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         exchange.getResponseHeaders().add("Content-Type", "application/json");
         BadRequestResponse res = new BadRequestResponse(body);
         String jsonResponse = mapper.writeValueAsString(res);
-        handleResponse(exchange, jsonResponse);
+        handleResponse(exchange, 400, jsonResponse);
     }
     private class BadRequestResponse {
         public String message;

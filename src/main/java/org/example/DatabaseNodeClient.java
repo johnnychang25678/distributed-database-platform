@@ -150,13 +150,10 @@ public class DatabaseNodeClient {
         if (this.partitionType.equals("horizontal")) {
             // insert by key % numPartitions
             int partitionId = Integer.parseInt(values.get(0)) % this.numPartitions;
-            System.out.println("Inserting into partition " + partitionId);
+            checkAlive(partitionId);
+            // System.out.println("Inserting into partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
-                    if (!replica.isServerAlive()) {
-                        // one of replicas is down, should not able to insert
-                        throw new CannotWriteException("One of the replicas is down");
-                    }
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     stub.insertSQL(columns, values);
                 } catch (RemoteException | NotBoundException e) {
@@ -177,18 +174,18 @@ public class DatabaseNodeClient {
                 int partitionId = columnToPartition.get(col);
                 rearrangedColumns.get(partitionId).add(col);
             }
+            // first check if all partitions are alive
+            for (int i = 0; i < numPartitions; i++) {
+                checkAlive(i);
+            }
             for (int i = 0; i < numPartitions; i++) {
                 List<String> rearrangedValues = new ArrayList<>();
                 for (String col : rearrangedColumns.get(i)) {
                     rearrangedValues.add(kvMap.get(col));
                 }
-                System.out.println("Inserting into partition " + i);
+                // System.out.println("Inserting into partition " + i);
                 for (DatabaseNodeReplica replica : reps.get(i)) {
                     try {
-                        if (!replica.isServerAlive()) {
-                            // one of replicas is down, should not able to insert
-                            throw new CannotWriteException("One of the replicas is down");
-                        }
                         DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                         stub.insertSQL(rearrangedColumns.get(i), rearrangedValues);
                     } catch (RemoteException | NotBoundException e) {
@@ -199,8 +196,10 @@ public class DatabaseNodeClient {
             }
         } else if (this.partitionType.equals("none")) {
             // insert into all replicas
-            System.out.println("Inserting into replicas");
-            for (DatabaseNodeReplica replica : reps.get(0)) {
+            // System.out.println("Inserting into replicas");
+            int partitionId = 0;
+            checkAlive(partitionId);
+            for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     if (!replica.isServerAlive()) {
                         // one of replicas is down, should not able to insert
@@ -216,16 +215,18 @@ public class DatabaseNodeClient {
         }
     }
 
-    public void insertNoSQL(List<String> kvPairs) {
+    public void insertNoSQL(List<String> kvPairs) throws CannotWriteException {
         if (this.partitionType.equals("horizontal")) {
             // insert by key % numPartitions
             // example [id, 1, name, "John"]
             int partitionId = Integer.parseInt(kvPairs.get(1)) % this.numPartitions;
-            System.out.println("Inserting into partition " + partitionId);
+            checkAlive(partitionId);
+            // System.out.println("Inserting into partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
-                    stub.insertNoSQL(kvPairs);
+                    List<String> serializableList = new ArrayList<>(kvPairs);
+                    stub.insertNoSQL(serializableList);
                 } catch (RemoteException | NotBoundException e) {
                     System.out.println("RMI error inserting into replica");
                     e.printStackTrace();
@@ -233,8 +234,10 @@ public class DatabaseNodeClient {
             }
         } else if (this.partitionType.equals("none")) {
             // insert into all replicas
-            System.out.println("Inserting into replicas");
-            for (DatabaseNodeReplica replica : reps.get(0)) {
+            // System.out.println("Inserting into replicas");
+            int partitionId = 0;
+            checkAlive(partitionId);
+            for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     List<String> serializableList = new ArrayList<>(kvPairs);
@@ -295,10 +298,10 @@ public class DatabaseNodeClient {
                 e.printStackTrace();
             }
             // convert the result array to a string with newlines
-            return String.join("\n", resultList);
+            return String.join("", resultList);
         } else if (this.partitionType.equals("none")) {
             // read from first replica
-            System.out.println("Selecting from replicas");
+            // System.out.println("Selecting from replicas");
             try {
                 // only one partition
                 for (DatabaseNodeReplica replica : reps.get(0)) {
@@ -317,7 +320,7 @@ public class DatabaseNodeClient {
     public String selectNoSQL() {
         if (this.partitionType.equals("horizontal")){
             // read from all partitions and aggregate
-            System.out.println("Selecting from replicas");
+            // System.out.println("Selecting from replicas");
             List<String> resultList = new ArrayList<>();
             try {
                 for (int i = 0; i < numPartitions; i++) {
@@ -325,7 +328,7 @@ public class DatabaseNodeClient {
                     for (DatabaseNodeReplica replica : reps.get(i)) {
                         if (replica.isServerAlive()) {
                             DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
-                            resultList.add(stub.selectSQL());
+                            resultList.add(stub.selectNoSQL());
                             break;
                         }
                     }
@@ -335,10 +338,10 @@ public class DatabaseNodeClient {
                 e.printStackTrace();
             }
             // convert the result array to a string with newlines
-            return String.join("\n", resultList);
+            return String.join("", resultList);
         } else if (this.partitionType.equals("none")) {
             // read from first replica
-            System.out.println("Selecting from replicas");
+            // System.out.println("Selecting from replicas");
             try {
                 for (DatabaseNodeReplica replica : reps.get(0)) {
                     if (replica.isServerAlive()) {
@@ -354,7 +357,7 @@ public class DatabaseNodeClient {
         return "";
     }
 
-    public void updateSQL(List<String> columns, List<String> values, String where) {
+    public void updateSQL(List<String> columns, List<String> values, String where) throws CannotWriteException {
         String[] whereParts = where.split("=");
         String[] whereArr = {whereParts[0].trim(), whereParts[1].trim()};
 
@@ -362,9 +365,14 @@ public class DatabaseNodeClient {
             // update by key % numPartitions
             // need to be WHERE id = xxx to delete by key
             int partitionId = Integer.parseInt(whereArr[1]) % this.numPartitions;
+            checkAlive(partitionId);
             // System.out.println("Updating partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
+                    if (!replica.isServerAlive()) {
+                        // one of replicas is down, should not able to update
+                        throw new CannotWriteException("One of the replicas is down");
+                    }
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     stub.updateSQL(columns, values, whereArr);
                 } catch (RemoteException | NotBoundException e) {
@@ -376,6 +384,7 @@ public class DatabaseNodeClient {
             // only support same partition update, so if the where clause and update columns are
             // not in the same partition, it will not work
             int partitionId = columnToPartition.get(whereArr[0]);
+            checkAlive(partitionId);
             // should locate the partition by the column in the where clause
             // System.out.println("Updating partition " + partitionId);
             // update all the replicas in the partition
@@ -390,7 +399,9 @@ public class DatabaseNodeClient {
             }
         } else if (this.partitionType.equals("none")) {
             // update all replicas
-            System.out.println("Updating replicas");
+            // System.out.println("Updating replicas");
+            int partitionId = 0;
+            checkAlive(partitionId);
             for (DatabaseNodeReplica replica : reps.get(0)) {
                 try {
                     // where clause is now FirstName = 'John'
@@ -405,11 +416,12 @@ public class DatabaseNodeClient {
         }
     }
 
-    public void updateNoSQL(List<String> kvPairs, List<String> where) {
+    public void updateNoSQL(List<String> kvPairs, List<String> where) throws CannotWriteException {
         if (this.partitionType.equals("horizontal")) {
             // update by key % numPartitions
             // need to be WHERE id = xxx to update by key
             int partitionId = Integer.parseInt(where.get(1)) % this.numPartitions;
+            checkAlive(partitionId);
             // System.out.println("Updating partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
@@ -424,7 +436,9 @@ public class DatabaseNodeClient {
             }
         } else if (this.partitionType.equals("none")) {
             // update all replicas
-            System.out.println("Updating replicas");
+            // System.out.println("Updating replicas");
+            int partitionId = 0;
+            checkAlive(partitionId);
             for (DatabaseNodeReplica replica : reps.get(0)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
@@ -439,13 +453,14 @@ public class DatabaseNodeClient {
         }
     }
 
-    public void deleteSQL(String where) {
+    public void deleteSQL(String where) throws CannotWriteException {
         String[] whereSplit = where.split("=");
         String[] whereArr = {whereSplit[0].trim(), whereSplit[1].trim()};
         if (this.partitionType.equals("horizontal")) {
             // delete by key % numPartitions
             // need to be WHERE id = xxx to delete by key
             int partitionId = Integer.parseInt(whereArr[1]) % this.numPartitions;
+            checkAlive(partitionId);
             // System.out.println("Deleting from partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
@@ -458,12 +473,17 @@ public class DatabaseNodeClient {
             }
         } else if (this.partitionType.equals("vertical")) {
             int partitionId = columnToPartition.get(whereArr[0]);
+            checkAlive(partitionId);
             // System.out.println("Deleting from partition " + partitionId);
             // delete from all replicas in the partition
             // should delete the same rows from all partitions
             List<Integer> deletedRows = new ArrayList<>();
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
+                    if (!replica.isServerAlive()) {
+                        // one of replicas is down, should not able to delete
+                        throw new CannotWriteException("One of the replicas is down");
+                    }
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     deletedRows = stub.deleteSQL(whereArr);
                 } catch (RemoteException | NotBoundException e) {
@@ -489,6 +509,8 @@ public class DatabaseNodeClient {
         } else if (this.partitionType.equals("none")) {
             // delete from all replicas
             // System.out.println("Deleting from replicas");
+            int partitionId = 0;
+            checkAlive(partitionId);
             for (DatabaseNodeReplica replica : reps.get(0)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
@@ -501,11 +523,12 @@ public class DatabaseNodeClient {
         }
     }
 
-    public void deleteNoSQL(List<String> where) {
+    public void deleteNoSQL(List<String> where) throws CannotWriteException {
         if (this.partitionType.equals("horizontal")) {
             // delete by key % numPartitions
             // need to be WHERE id = xxx to delete by key
             int partitionId = Integer.parseInt(where.get(1)) % this.numPartitions;
+            checkAlive(partitionId);
             // System.out.println("Deleting from partition " + partitionId);
             for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
@@ -520,7 +543,9 @@ public class DatabaseNodeClient {
         } else if (this.partitionType.equals("none")) {
             // delete from all replicas
             // System.out.println("Deleting from replicas");
-            for (DatabaseNodeReplica replica : reps.get(0)) {
+            int partitionId = 0;
+            checkAlive(partitionId);
+            for (DatabaseNodeReplica replica : reps.get(partitionId)) {
                 try {
                     DatabaseNodeInterface stub = getReplicaStub(replica.getTableName());
                     List<String> serializableWhere = new ArrayList<>(where);
@@ -529,6 +554,15 @@ public class DatabaseNodeClient {
                     System.out.println("RMI error deleting from replica");
                     e.printStackTrace();
                 }
+            }
+        }
+    }
+
+    // check if all replicas are alive
+    private void checkAlive(int partitionId) throws CannotWriteException {
+        for (DatabaseNodeReplica replica : reps.get(partitionId)) {
+            if (!replica.isServerAlive()) {
+                throw new CannotWriteException("One of the replicas is down");
             }
         }
     }
