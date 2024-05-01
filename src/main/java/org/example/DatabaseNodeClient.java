@@ -69,7 +69,7 @@ public class DatabaseNodeClient {
                     // table-DBType-partitionId-replicaId
                     String uniqueName = tableName + "-" + this.dbType + "-" + i + "-" + j;
                     DatabaseNodeReplica dbReplica = new DatabaseNodeReplica(uniqueName, columns);
-                    System.out.println("Binding replica " + uniqueName);
+                    // System.out.println("Binding replica " + uniqueName);
                     registry.rebind(uniqueName, dbReplica);
                     replicas.add(dbReplica);
                 }
@@ -118,15 +118,13 @@ public class DatabaseNodeClient {
                                 continue;
                             }
                             if (!stub.heartbeatRequest()){
-                                System.out.println("Replica " + replica.getTableName() + " is not alive");
+                                // System.out.println("Replica " + replica.getTableName() + " is not alive");
                                 replica.setServerAlive(false);
                             } else {
-//                                if (replica.getTableName().equals("students-SQL-0-0"))
-//                                    System.out.println("Replica " + replica.getTableName() + " is alive");
                                 replica.setServerAlive(true);
                             }
                         } catch (RemoteException | NotBoundException e) {
-                            System.out.println("Error checking replica's heartbeat, setting alive to false...");
+                            // System.out.println("Error checking replica's heartbeat, setting alive to false...");
                             replica.setServerAlive(false);
                         }
                     }

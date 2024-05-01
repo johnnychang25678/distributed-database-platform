@@ -1,6 +1,5 @@
 package org.example;
 
-
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -19,7 +18,7 @@ import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -75,15 +74,6 @@ class CoordinatorTest {
         }
         System.out.println("Error in sendPostRequest!!!!!");
         return null;
-    }
-
-    @Test
-    void myTest() throws Exception {
-        try (CloseableHttpClient client = HttpClients.createDefault()) {
-            HttpGet request = new HttpGet("http://localhost:" + testPort + "/status");
-            String responseBody = EntityUtils.toString(client.execute(request).getEntity());
-            assertEquals("ok", responseBody);
-        }
     }
 
     // 1. test CRUD operations for SQL
@@ -997,5 +987,61 @@ class CoordinatorTest {
         assertEquals(1, cache.size());
         assertTrue(cache.containsKey("students-SQL"));
         assertEquals("2,'Bob',21,\n", cache.get("students-SQL"));
+    }
+
+    // 11. Test concurrent requests
+    @Test
+    void testConcurrentRequests() throws Exception {
+        // CREATE
+        CreateRequestDto createRequestDto = new CreateRequestDto();
+        createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
+        createRequestDto.setDatabaseType("SQL");
+        createRequestDto.setReplicaCount(2);
+        createRequestDto.setPartitionType("none");
+        createRequestDto.setNumPartitions(1);
+        String createRequestJson = objectMapper.writeValueAsString(createRequestDto);
+        sendPostRequest("/create", createRequestJson);
+
+        // use a loop to start 10 threads to insert concurrently
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+        for (int i = 0; i < 10; i++) {
+            InsertRequestDto insertRequestDto = new InsertRequestDto();
+            int age = 20 + i;
+            insertRequestDto.setStatement("INSERT INTO students (id, name, age) VALUES (" + i + ", 'Alice', " + age + ")");
+            insertRequestDto.setDatabaseType("SQL");
+            String insertRequestJson = objectMapper.writeValueAsString(insertRequestDto);
+            executor.execute(new InsertTask(insertRequestJson));
+        }
+        executor.shutdown();
+
+        // wait for all threads to finish
+        Thread.sleep(5000);
+
+        // check if all 10 inserts are successful by SELECT
+        SelectRequestDto selectRequestDto = new SelectRequestDto();
+        selectRequestDto.setStatement("SELECT * FROM students");
+        selectRequestDto.setDatabaseType("SQL");
+        String selectRequestJson = objectMapper.writeValueAsString(selectRequestDto);
+        HttpResponseData res = sendPostRequest("/select", selectRequestJson);
+        if (res == null) {
+            throw new Exception("Error in select request");
+        }
+        assertEquals(200, res.getStatusCode());
+        String responseBody = res.getResponseBody();
+        for (int i = 0; i < 10; i++) {
+            assertTrue(responseBody.contains(i + ",'Alice'," + (20 + i)));
+        }
+    }
+    class InsertTask implements Runnable {
+        private String insertRequestJson;
+
+        public InsertTask(String insertRequestJson) {
+            this.insertRequestJson = insertRequestJson;
+        }
+
+        @Override
+        public void run() {
+            sendPostRequest("/insert", insertRequestJson);
+        }
     }
 }

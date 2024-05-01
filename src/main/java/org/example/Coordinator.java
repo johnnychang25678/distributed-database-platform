@@ -68,17 +68,13 @@ public class Coordinator {
     }
 
     public void run(int port) throws IOException {
-        // an http server that listens on the specified port
         server = HttpServer.create(new InetSocketAddress(port), 0);
-        // create a new context for the server
+
         server.createContext("/create", new CreateHandler());
         server.createContext("/insert", new InsertHandler());
         server.createContext("/select", new SelectHandler());
         server.createContext("/update", new UpdateHandler());
         server.createContext("/delete", new DeleteHandler());
-
-        // for test
-        server.createContext("/status", new StatusHandler());
 
         server.setExecutor(Executors.newCachedThreadPool()); // to avoid creating and destroying thread every request
         server.start();
@@ -495,20 +491,6 @@ public class Coordinator {
                     e.printStackTrace();
                 }
                 handleOkResponse(exchange);
-            }
-        }
-    }
-
-    // just a testing endpoint
-    private class StatusHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            if ("GET".equals(exchange.getRequestMethod())) {
-                try {
-                    handleResponse(exchange, 200, "ok");
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
             }
         }
     }
