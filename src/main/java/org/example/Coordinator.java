@@ -21,7 +21,6 @@ import net.sf.jsqlparser.statement.create.table.CreateTable;
 import net.sf.jsqlparser.statement.insert.Insert;
 import org.example.exception.CannotWriteException;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -61,6 +60,12 @@ public class Coordinator {
     }
     private HttpServer server;
     private Registry registry;
+
+    private ConcurrentHashMap<String, String> cache = new ConcurrentHashMap<>();
+    // for test
+    public ConcurrentHashMap<String, String> getCache() {
+        return cache;
+    }
 
     public void run(int port) throws IOException {
         // an http server that listens on the specified port
@@ -209,6 +214,7 @@ public class Coordinator {
                             }
                             List<String> values = insert.getValues().getExpressions().stream().map(Expression::toString).toList();
                             databases.get(key).insertSQL(insertCols, values);
+                            cache.remove(key);
                         } else {
                             handleBadRequest(exchange, "invalid insert statement");
                             return;
@@ -237,6 +243,7 @@ public class Coordinator {
                         }
                         List<String> kvPairs = statementList.subList(2, statementList.size());
                         databases.get(key).insertNoSQL(kvPairs);
+                        cache.remove(key);
                     } else {
                         handleBadRequest(exchange);
                         return;
@@ -282,6 +289,7 @@ public class Coordinator {
                             }
                             // will just support select * for now
                             String result = databases.get(key).selectSQL();
+                            cache.put(key, result);
                             handleResponse(exchange, 200, result);
                         } else {
                             handleBadRequest(exchange, "invalid select statement");
@@ -305,6 +313,7 @@ public class Coordinator {
                         // will just support select * for now
                         String result = databases.get(key).selectNoSQL();
                         handleResponse(exchange, 200, result);
+                        cache.put(key, result);
                     } else {
                         handleBadRequest(exchange);
                     }
@@ -351,6 +360,7 @@ public class Coordinator {
                             // just support simple where now
                             Expression where = update.getWhere();
                             databases.get(key).updateSQL(cols, values, where.toString());
+                            cache.remove(key);
                         } else {
                             handleBadRequest(exchange, "invalid update statement");
                             return;
@@ -386,6 +396,7 @@ public class Coordinator {
                         List<String> kvPairs = statementList.subList(2, whereIndex);
                         List<String> where = statementList.subList(whereIndex + 1, statementList.size()); // only support simple where for now
                         databases.get(key).updateNoSQL(kvPairs, where);
+                        cache.remove(key);
                     } else {
                         handleBadRequest(exchange);
                         return;
@@ -432,6 +443,7 @@ public class Coordinator {
                             // just support simple where now
                             Expression where = delete.getWhere();
                             databases.get(key).deleteSQL(where.toString());
+                            cache.remove(key);
                         } else {
                             handleBadRequest(exchange);
                             return;
@@ -466,6 +478,7 @@ public class Coordinator {
                         }
                         List<String> where = statementList.subList(whereIndex + 1, statementList.size());
                         databases.get(key).deleteNoSQL(where);
+                        cache.remove(key);
                     } else {
                         handleBadRequest(exchange);
                         return;

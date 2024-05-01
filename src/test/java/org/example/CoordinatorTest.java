@@ -19,6 +19,7 @@ import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -859,4 +860,88 @@ class CoordinatorTest {
     }
 
     // 10. Test caching
+    @Test
+    void testCache() throws Exception {
+        // CREATE
+        CreateRequestDto createRequestDto = new CreateRequestDto();
+        createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
+        createRequestDto.setDatabaseType("SQL");
+        createRequestDto.setReplicaCount(2);
+        createRequestDto.setPartitionType("none");
+        createRequestDto.setNumPartitions(1);
+        String createRequestJson = objectMapper.writeValueAsString(createRequestDto);
+        sendPostRequest("/create", createRequestJson);
+
+        // INSERT some data
+        InsertRequestDto insertRequestDto = new InsertRequestDto();
+        insertRequestDto.setStatement("INSERT INTO students (id, name, age) VALUES (1, 'Alice', 20)");
+        insertRequestDto.setDatabaseType("SQL");
+        String insertRequestJson = objectMapper.writeValueAsString(insertRequestDto);
+        sendPostRequest("/insert", insertRequestJson);
+
+        // SELECT to cache the data
+        SelectRequestDto selectRequestDto = new SelectRequestDto();
+        selectRequestDto.setStatement("SELECT * FROM students");
+        selectRequestDto.setDatabaseType("SQL");
+        String selectRequestJson = objectMapper.writeValueAsString(selectRequestDto);
+        sendPostRequest("/select", selectRequestJson);
+
+        // check if the data is cached by reading the cache map directly
+        ConcurrentHashMap<String, String> cache = coordinator.getCache();
+        assertEquals(1, cache.size());
+        assertTrue(cache.containsKey("students-SQL"));
+        assertEquals("1,'Alice',20,\n", cache.get("students-SQL"));
+
+        // INSERT new data
+        insertRequestDto.setStatement("INSERT INTO students (id, name, age) VALUES (2, 'Bob', 21)");
+        insertRequestJson = objectMapper.writeValueAsString(insertRequestDto);
+        sendPostRequest("/insert", insertRequestJson);
+
+        // cache should be invalidated after INSERT
+        assertEquals(0, cache.size());
+
+        // SELECT to cache the new data
+        sendPostRequest("/select", selectRequestJson);
+
+        // check if the new data is cached
+        assertEquals(1, cache.size());
+        assertTrue(cache.containsKey("students-SQL"));
+        assertEquals("1,'Alice',20,\n2,'Bob',21,\n", cache.get("students-SQL"));
+
+        // UPDATE should invalidate the cache
+        UpdateRequestDto updateRequestDto = new UpdateRequestDto();
+        updateRequestDto.setStatement("UPDATE students SET age = 22 WHERE id = 1");
+        updateRequestDto.setDatabaseType("SQL");
+        String updateRequestJson = objectMapper.writeValueAsString(updateRequestDto);
+        sendPostRequest("/update", updateRequestJson);
+
+        // cache should be invalidated after UPDATE
+        assertEquals(0, cache.size());
+
+        // SELECT to cache the updated data
+        sendPostRequest("/select", selectRequestJson);
+
+        // check if the updated data is cached
+        assertEquals(1, cache.size());
+        assertTrue(cache.containsKey("students-SQL"));
+        assertEquals("1,'Alice',22,\n2,'Bob',21,\n", cache.get("students-SQL"));
+
+        // DELETE should invalidate the cache
+        DeleteRequestDto deleteRequestDto = new DeleteRequestDto();
+        deleteRequestDto.setStatement("DELETE FROM students WHERE id = 1");
+        deleteRequestDto.setDatabaseType("SQL");
+        String deleteRequestJson = objectMapper.writeValueAsString(deleteRequestDto);
+        sendPostRequest("/delete", deleteRequestJson);
+
+        // cache should be invalidated after DELETE
+        assertEquals(0, cache.size());
+
+        // SELECT to cache the updated data
+        sendPostRequest("/select", selectRequestJson);
+
+        // check if the updated data is cached
+        assertEquals(1, cache.size());
+        assertTrue(cache.containsKey("students-SQL"));
+        assertEquals("2,'Bob',21,\n", cache.get("students-SQL"));
+    }
 }
