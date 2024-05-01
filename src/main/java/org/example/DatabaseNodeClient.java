@@ -49,7 +49,6 @@ public class DatabaseNodeClient {
                     registry.rebind(uniqueName, dbReplica);
                     replicas.add(dbReplica);
                 }
-                // .csv files aren't created until the first insert
                 reps.put(i, replicas);
             }
         } else if (partitionType.equals("vertical")) {

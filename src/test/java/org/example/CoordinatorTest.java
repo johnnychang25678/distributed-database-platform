@@ -16,9 +16,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.UnsupportedEncodingException;
+import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 class CoordinatorTest {
     private Coordinator coordinator;
@@ -247,8 +247,136 @@ class CoordinatorTest {
     }
 
     // 3. Test all replicas are in sync for SQL
+    @Test
+    void testReplicaSyncSQL() throws Exception {
+        // CREATE then INSERT
+        CreateRequestDto createRequestDto = new CreateRequestDto();
+        createRequestDto.setStatement("CREATE TABLE students (id INT PRIMARY KEY, name VARCHAR(255), age INT)");
+        createRequestDto.setDatabaseType("SQL");
+        createRequestDto.setReplicaCount(3);
+        createRequestDto.setPartitionType("none");
+        createRequestDto.setNumPartitions(1);
+        // no need to test this, previous tests already cover this
+        String createRequestJson = objectMapper.writeValueAsString(createRequestDto);
+        sendPostRequest("/create", createRequestJson);
+        // after CREATE, will create .csv files, check .csv file names are correct
+        // table-DBType-partitionId-replicaId
+        // students-SQL-0-0.csv
+        // students-SQL-0-1.csv
+        // students-SQL-0-2.csv
+        List<String> csvFiles = coordinator.listCsvFiles();
+        assertEquals(3, csvFiles.size());
+        assertTrue(csvFiles.contains("students-SQL-0-0.csv"));
+        assertTrue(csvFiles.contains("students-SQL-0-1.csv"));
+        assertTrue(csvFiles.contains("students-SQL-0-2.csv"));
+
+        InsertRequestDto insertRequestDto = new InsertRequestDto();
+        insertRequestDto.setStatement("INSERT INTO students (id, name, age) VALUES (1, 'Alice', 20)");
+        insertRequestDto.setDatabaseType("SQL");
+        String insertRequestJson = objectMapper.writeValueAsString(insertRequestDto);
+        sendPostRequest("/insert", insertRequestJson);
+        // check all replicas have the same data by reading csv files
+        String read0 = coordinator.readFromCsv("students-SQL-0-0.csv");
+        String read1 = coordinator.readFromCsv("students-SQL-0-1.csv");
+        String read2 = coordinator.readFromCsv("students-SQL-0-2.csv");
+        assertEquals(read0, read1);
+        assertEquals(read1, read2);
+        assertEquals(read0, read2);
+
+        // UPDATE should also be in sync
+        UpdateRequestDto updateRequestDto = new UpdateRequestDto();
+        updateRequestDto.setStatement("UPDATE students SET age = 21 WHERE id = 1");
+        updateRequestDto.setDatabaseType("SQL");
+        String updateRequestJson = objectMapper.writeValueAsString(updateRequestDto);
+        sendPostRequest("/update", updateRequestJson);
+        // check all replicas have the same data by reading csv files
+        read0 = coordinator.readFromCsv("students-SQL-0-0.csv");
+        read1 = coordinator.readFromCsv("students-SQL-0-1.csv");
+        read2 = coordinator.readFromCsv("students-SQL-0-2.csv");
+        assertEquals(read0, read1);
+        assertEquals(read1, read2);
+        assertEquals(read0, read2);
+
+        // DELETE should also be in sync
+        DeleteRequestDto deleteRequestDto = new DeleteRequestDto();
+        deleteRequestDto.setStatement("DELETE FROM students WHERE id = 1");
+        deleteRequestDto.setDatabaseType("SQL");
+        String deleteRequestJson = objectMapper.writeValueAsString(deleteRequestDto);
+        sendPostRequest("/delete", deleteRequestJson);
+        // check all replicas have the same data by reading csv files
+        read0 = coordinator.readFromCsv("students-SQL-0-0.csv");
+        read1 = coordinator.readFromCsv("students-SQL-0-1.csv");
+        read2 = coordinator.readFromCsv("students-SQL-0-2.csv");
+        assertEquals(read0, read1);
+        assertEquals(read1, read2);
+        assertEquals(read0, read2);
+
+    }
 
     // 4. Test all replicas are in sync for NoSQL
+    @Test
+    void testReplicaSyncNoSQL() throws Exception {
+        // CREATE then INSERT
+        CreateRequestDto createRequestDto = new CreateRequestDto();
+        createRequestDto.setStatement("CREATE TABLE students");
+        createRequestDto.setDatabaseType("NoSQL");
+        createRequestDto.setReplicaCount(3);
+        createRequestDto.setPartitionType("none");
+        createRequestDto.setNumPartitions(1);
+        // no need to test this, previous tests already cover this
+        String createRequestJson = objectMapper.writeValueAsString(createRequestDto);
+        sendPostRequest("/create", createRequestJson);
+        // after CREATE, will create .csv files, check .csv file names are correct
+        // table-DBType-partitionId-replicaId
+        // students-NoSQL-0-0.csv
+        // students-NoSQL-0-1.csv
+        // students-NoSQL-0-2.csv
+        List<String> csvFiles = coordinator.listCsvFiles();
+        assertEquals(3, csvFiles.size());
+        assertTrue(csvFiles.contains("students-NoSQL-0-0.csv"));
+        assertTrue(csvFiles.contains("students-NoSQL-0-1.csv"));
+        assertTrue(csvFiles.contains("students-NoSQL-0-2.csv"));
+
+        InsertRequestDto insertRequestDto = new InsertRequestDto();
+        insertRequestDto.setStatement("INSERT students id 1 name 'Alice' age 20");
+        insertRequestDto.setDatabaseType("NoSQL");
+        String insertRequestJson = objectMapper.writeValueAsString(insertRequestDto);
+        sendPostRequest("/insert", insertRequestJson);
+        // check all replicas have the same data by reading csv files
+        String read0 = coordinator.readFromCsv("students-NoSQL-0-0.csv");
+        String read1 = coordinator.readFromCsv("students-NoSQL-0-1.csv");
+        String read2 = coordinator.readFromCsv("students-NoSQL-0-2.csv");
+        assertEquals(read0, read1);
+        assertEquals(read1, read2);
+        assertEquals(read0, read2);
+
+        // UPDATE should also be in sync
+        UpdateRequestDto updateRequestDto = new UpdateRequestDto();
+        updateRequestDto.setStatement("UPDATE students age 21 WHERE id 1");
+        updateRequestDto.setDatabaseType("NoSQL");
+        String updateRequestJson = objectMapper.writeValueAsString(updateRequestDto);
+        sendPostRequest("/update", updateRequestJson);
+        // check all replicas have the same data by reading csv files
+        read0 = coordinator.readFromCsv("students-NoSQL-0-0.csv");
+        read1 = coordinator.readFromCsv("students-NoSQL-0-1.csv");
+        read2 = coordinator.readFromCsv("students-NoSQL-0-2.csv");
+        assertEquals(read0, read1);
+        assertEquals(read1, read2);
+        assertEquals(read0, read2);
+
+        // DELETE should also be in sync
+        DeleteRequestDto deleteRequestDto = new DeleteRequestDto();
+        deleteRequestDto.setStatement("DELETE students WHERE id 1");
+        deleteRequestDto.setDatabaseType("NoSQL");
+        String deleteRequestJson = objectMapper.writeValueAsString(deleteRequestDto);
+        sendPostRequest("/delete", deleteRequestJson);
+        read0 = coordinator.readFromCsv("students-NoSQL-0-0.csv");
+        read1 = coordinator.readFromCsv("students-NoSQL-0-1.csv");
+        read2 = coordinator.readFromCsv("students-NoSQL-0-2.csv");
+        assertEquals(read0, read1);
+        assertEquals(read1, read2);
+        assertEquals(read0, read2);
+    }
 
     // 5. If replica is down, the system can read but cannot update, insert, or delete for SQL
 

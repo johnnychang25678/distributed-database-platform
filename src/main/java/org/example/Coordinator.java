@@ -20,6 +20,7 @@ import net.sf.jsqlparser.statement.create.table.ColumnDefinition;
 import net.sf.jsqlparser.statement.create.table.CreateTable;
 import net.sf.jsqlparser.statement.insert.Insert;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -32,6 +33,8 @@ import java.rmi.server.UnicastRemoteObject;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class Coordinator {
     // main method to start the program
@@ -525,7 +528,7 @@ public class Coordinator {
         }
     }
 
-    // for test
+    // ******************* for test *************************
     public void deleteCsvFiles() {
         Path directory = Paths.get("").toAbsolutePath();
         try {
@@ -540,6 +543,29 @@ public class Coordinator {
             });
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+    public List<String> listCsvFiles() throws IOException {
+        Path directoryPath = Paths.get("").toAbsolutePath();
+        if (!Files.exists(directoryPath)) {
+            return List.of();  // Return an empty list if the directory does not exist
+        }
+
+        try (Stream<Path> stream = Files.walk(directoryPath, 1)) {  // Depth 1 to only look in the specified directory
+            return stream
+                    .filter(path -> path.toString().endsWith(".csv"))
+                    .map(Path::getFileName)
+                    .map(Path::toString)
+                    .collect(Collectors.toList());
+        }
+    }
+
+    public String readFromCsv(String fileName) {
+        try {
+            return Files.readString(Paths.get(fileName));
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "";
         }
     }
 }
