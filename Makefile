@@ -3,5 +3,5 @@ build:
 	mvn clean package
 
 # run tests
-test:
+final:
 	mvn test
