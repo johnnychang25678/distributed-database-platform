@@ -5,13 +5,24 @@ import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 // RMI server implementation, provide service
 public class DatabaseNodeReplica extends UnicastRemoteObject implements DatabaseNodeInterface{
+    // TODO: need to lock file for write operations
     private String tableName;
     private List<String> columns;
     private String csvFileName;
+
+    private boolean isFileExist = false;
+    public boolean isFileExist() {
+        return isFileExist;
+    }
+    private boolean isServerAlive = true;
+    public boolean isServerAlive() {
+        return isServerAlive;
+    }
 
     public DatabaseNodeReplica(String tableName, List<String> columns) throws RemoteException {
         super();
@@ -26,8 +37,11 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                     String header = String.join(",", columns);
                     writer.write(header);
                 }
+            } else {
+                // if NoSQL, columns == null, no need to write header (schema-less) but still need to create file
+                File file = new File(csvFileName);
+                file.createNewFile();
             }
-            // if NoSQL, columns == null, no need to write header (schema-less)
         } catch (IOException e) {
             System.out.println("Error creating csv file");
             e.printStackTrace();
@@ -66,7 +80,7 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 reader.readLine(); // skip header
             }
             String line;
-            while ((line = reader.readLine()) != null) {
+            while ((line = reader.readLine()) != null && !line.isEmpty()) {
                 data.append(line).append("\n");
             }
         } catch (IOException e) {
@@ -98,7 +112,11 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
         }
     }
 
-    private void updateHelper(List<String> columns, List<String> values, String[] where, boolean isUpdate) {
+    private List<Integer> updateSQLHelper(List<String> columns, List<String> values, String[] where, boolean isUpdate) {
+//        System.out.println("*********** updateHelper");
+//        System.out.println("columns: " + columns + " values: " + values + " where: " + Arrays.toString(where) + " isUpdate: " + isUpdate);
+        // isUpdate is to differentiate between update and delete
+        List<Integer> updatedRows = new ArrayList<>();
         try {
             boolean updated = false;
             File tempFile = new File("temp-" + csvFileName);
@@ -119,12 +137,13 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                 if (whereIndex == -1) {
                     System.out.println("Where column not found");
                     tempFile.delete();
-                    return;
+                    return new ArrayList<>();
                 }
                 // write header to temp file
                 writer.write(header);
                 // read each row
                 String line;
+                int count = 0;
                 while ((line = reader.readLine()) != null) {
                     // if where condition is met, update columns with values
                     String[] row = line.split(",");
@@ -134,25 +153,27 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
                                 for (int j = 0; j < headerColumns.length; j++) {
                                     if (headerColumns[j].equals(columns.get(i))) {
                                         row[j] = values.get(i);
+                                        updatedRows.add(count);
                                         updated = true;
                                     }
                                 }
                             }
                         } else {
-                            // do not write this line
+                            // for deletion, just do not write this line, later on this file will replace the original file
+                            updatedRows.add(count);
                             updated = true;
                             continue;
                         }
                     }
+                    count++;
                     writer.newLine();
-                    writer.write(String.join(",", row));
+                    writer.write(String.join(",", row) + ",");
                 }
             }
             if (!updated) {
                 System.out.println("No rows updated");
                 // delete temp file
                 tempFile.delete();
-                return;
             }
             // delete original file and rename temp file
             File originalFile = new File(csvFileName);
@@ -167,17 +188,61 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
             System.out.println("Error updating csv file");
             e.printStackTrace();
         }
-
+        return updatedRows;
     }
 
     @Override
-    public void updateSQL(List<String> columns, List<String> values, String[] where) throws RemoteException {
-        updateHelper(columns, values, where, true);
+    public List<Integer> updateSQL(List<String> columns, List<String> values, String[] where) throws RemoteException {
+        return updateSQLHelper(columns, values, where, true);
     }
 
     @Override
-    public void deleteSQL(String[] where) throws RemoteException {
-        updateHelper(new ArrayList<>(), new ArrayList<>(), where, false);
+    public List<Integer> deleteSQL(String[] where) throws RemoteException {
+        return updateSQLHelper(new ArrayList<>(), new ArrayList<>(), where, false);
+    }
+
+    @Override
+    public void deleteByRowSQL(List<Integer> rows) {
+        // given row numbers, delete rows (for vertical partitioning deletion)
+        boolean deleted = false;
+        Collections.sort(rows);
+        try {
+            File tempFile = new File("temp-" + csvFileName);
+            try (BufferedReader reader = new BufferedReader(new FileReader(csvFileName));
+                 BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile))
+            ) {
+                String header = reader.readLine();
+                writer.write(header);
+                String line;
+                int count = 0;
+                while ((line = reader.readLine()) != null) {
+                    if (rows.contains(count)) {
+                        deleted = true;
+                        count++;
+                        continue;
+                    }
+                    writer.newLine();
+                    writer.write(line);
+                    count++;
+                }
+            }
+            if (!deleted) {
+                System.out.println("No rows deleted");
+                tempFile.delete();
+                return;
+            }
+            File originalFile = new File(csvFileName);
+            if (originalFile.delete()) {
+                if (!tempFile.renameTo(originalFile)) {
+                    System.out.println("Error renaming temp file");
+                }
+            } else {
+                System.out.println("Error deleting original file");
+            }
+        } catch (IOException e) {
+            System.out.println("Error deleting from csv file");
+            e.printStackTrace();
+        }
     }
 
     @Override

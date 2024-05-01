@@ -8,6 +8,9 @@ import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.update.Update;
 import net.sf.jsqlparser.statement.update.UpdateSet;
+import org.example.config.HorizontalPartitionConfig;
+import org.example.config.PartitionConfig;
+import org.example.config.VerticalPartitionConfig;
 import org.example.dto.*;
 import net.sf.jsqlparser.JSQLParserException;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
@@ -58,10 +61,19 @@ public class Coordinator {
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())){
                 try {
-                    CreateRequestDto stmtRequestDto = mapper.readValue(exchange.getRequestBody(), CreateRequestDto.class);
-                    String databaseType = stmtRequestDto.getDatabaseType();
-                    String statementString = stmtRequestDto.getStatement();
-                    int replicaCount = stmtRequestDto.getReplicaCount();
+                    CreateRequestDto createRequestDto = mapper.readValue(exchange.getRequestBody(), CreateRequestDto.class);
+                    createRequestDto.validate();
+                    String databaseType = createRequestDto.getDatabaseType();
+                    String statementString = createRequestDto.getStatement();
+                    int replicaCount = createRequestDto.getReplicaCount();
+                    String partitionType = createRequestDto.getPartitionType();
+                    int numPartitions = createRequestDto.getNumPartitions();
+                    List<List<String>> verticalPartitionColumns = createRequestDto.getVerticalPartitionColumns();
+                    PartitionConfig partitionConfig = partitionType.equals("horizontal") ?
+                            new HorizontalPartitionConfig(numPartitions) : partitionType.equals("vertical") ?
+                            new VerticalPartitionConfig(numPartitions, verticalPartitionColumns) : null;
+                    System.out.println(partitionConfig.getPartitionType());
+                    System.out.println(partitionConfig.getNumPartitions());
                     if (databaseType.equals("SQL")) {
                         // get the statement from the request body
                         Statement statement = CCJSqlParserUtil.parse(statementString);
@@ -73,7 +85,8 @@ public class Coordinator {
                             DatabaseNodeClient node = new DatabaseNodeClient(
                                     tableName,
                                     columnNames,
-                                    replicaCount
+                                    replicaCount,
+                                    partitionConfig
                             );
                             String key = tableName + "-SQL";
                             if (databases.containsKey(key)) {
@@ -101,7 +114,7 @@ public class Coordinator {
                                 handleBadRequest(exchange, "table already exists");
                                 return;
                             }
-                            databases.put(key, new DatabaseNodeClient(tableName, null, replicaCount));
+                            databases.put(key, new DatabaseNodeClient(tableName, null, replicaCount, partitionConfig));
                         } else {
                             handleBadRequest(exchange);
                             return;
@@ -111,7 +124,7 @@ public class Coordinator {
                         return;
                     }
 
-                } catch (DatabindException | JSQLParserException e) {
+                } catch (DatabindException | JSQLParserException | IllegalArgumentException e) {
                     e.printStackTrace();
                     handleBadRequest(exchange);
                     return;
@@ -177,7 +190,6 @@ public class Coordinator {
                         }
                         String tableName = statementList.get(1);
                         String key = tableName + "-NoSQL";
-                        System.out.println("********** " + key);
                         if (!databases.containsKey(key)) {
                             handleBadRequest(exchange, "table not exist");
                             return;

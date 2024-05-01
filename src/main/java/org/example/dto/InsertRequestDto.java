@@ -3,10 +3,10 @@ package org.example.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class InsertRequestDto {
-    @JsonProperty("statement")
+    @JsonProperty(value = "statement", required = true)
     private String statement;
 
-    @JsonProperty("databaseType")
+    @JsonProperty(value = "databaseType", required = true)
     private String databaseType;
 
     public String getStatement() {
