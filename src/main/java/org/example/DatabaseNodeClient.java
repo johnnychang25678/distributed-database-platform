@@ -34,8 +34,8 @@ public class DatabaseNodeClient {
             throw new IllegalArgumentException("NoSQL databases cannot have vertical partitioning");
         }
 
-        this.numPartitions = partitionConfig == null ? 1 : partitionConfig.getNumPartitions();
         this.partitionType = partitionConfig == null ? "none" : partitionConfig.getPartitionType();
+        this.numPartitions = partitionConfig == null ? 1 : partitionConfig.getNumPartitions(); // if none, numPartitions = 1
 
         if (partitionType.equals("horizontal") || partitionType.equals("none")) {
             for (int i = 0; i < this.numPartitions; i++) {
@@ -174,23 +174,28 @@ public class DatabaseNodeClient {
             try {
                 if (this.partitionType.equals("horizontal")) {
                     for (int i = 0; i < numPartitions; i++) {
-                        // read from the first replica with isFileExist = true && isServerAlive = true
+                        // read from the first replica with isServerAlive = true
                         for (DatabaseNodeReplica replica : reps.get(i)) {
-                            if (replica.isFileExist() && replica.isServerAlive()) {
+                            if (replica.isServerAlive()) {
                                 resultList.add(replica.selectSQL());
                                 break;
                             }
                         }
                     }
                 } else {
-                    // vertical
+                    // vertical: need to read from all partitions and aggregate the result
                     Map<Integer, List<String>> partitionResults = new HashMap<>();
                     for (int i = 0; i < numPartitions; i++) {
-                        String res = reps.get(i).get(0).selectSQL(); // 1.John,4,John,
-                        // split by \n to array list
-                        List<String> resList = new ArrayList<>(Arrays.asList(res.split("\n")));
-                        if (!partitionResults.containsKey(i)) {
-                            partitionResults.put(i, resList);
+                        for (DatabaseNodeReplica replica : reps.get(i)) {
+                            if (replica.isServerAlive()) {
+                                String res = replica.selectSQL();
+                                // split by \n to array list
+                                List<String> resList = new ArrayList<>(Arrays.asList(res.split("\n")));
+                                if (!partitionResults.containsKey(i)) {
+                                    partitionResults.put(i, resList);
+                                }
+                                break;
+                            }
                         }
                     }
                     int rowCount = partitionResults.get(0).size();
@@ -214,7 +219,7 @@ public class DatabaseNodeClient {
             try {
                 // only one partition
                 for (DatabaseNodeReplica replica : reps.get(0)) {
-                    if (replica.isFileExist() && replica.isServerAlive()) {
+                    if (replica.isServerAlive()) {
                         return replica.selectSQL();
                     }
                 }
@@ -232,9 +237,9 @@ public class DatabaseNodeClient {
             List<String> resultList = new ArrayList<>();
             try {
                 for (int i = 0; i < numPartitions; i++) {
-                    // read from the first replica with isFileExist = true && isServerAlive = true
+                    // read from the first replica with isServerAlive = true
                     for (DatabaseNodeReplica replica : reps.get(i)) {
-                        if (replica.isFileExist() && replica.isServerAlive()) {
+                        if (replica.isServerAlive()) {
                             resultList.add(replica.selectSQL());
                             break;
                         }
@@ -250,15 +255,10 @@ public class DatabaseNodeClient {
             // read from first replica
             System.out.println("Selecting from replicas");
             try {
-                boolean find = false;
                 for (DatabaseNodeReplica replica : reps.get(0)) {
-                    if (replica.isFileExist() && replica.isServerAlive()) {
-                        find = true;
+                    if (replica.isServerAlive()) {
                         return replica.selectNoSQL();
                     }
-                }
-                if (!find) {
-                    System.out.println("No replica is alive");
                 }
             } catch (RemoteException e) {
                 System.out.println("RMI error selecting from replica");

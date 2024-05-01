@@ -15,10 +15,6 @@ public class DatabaseNodeReplica extends UnicastRemoteObject implements Database
     private List<String> columns;
     private String csvFileName;
 
-    private boolean isFileExist = false;
-    public boolean isFileExist() {
-        return isFileExist;
-    }
     private boolean isServerAlive = true;
     public boolean isServerAlive() {
         return isServerAlive;
