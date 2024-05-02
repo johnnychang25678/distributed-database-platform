@@ -6,6 +6,9 @@ build:
 final:
 	mvn test
 
+test:
+	mvn test
+
 # generate documentation for lab4
 docs:
 	mvn javadoc:javadoc
