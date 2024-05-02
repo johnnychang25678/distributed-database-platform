@@ -9,7 +9,10 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.*;
-
+/**
+ * Constructs a client for managing a distributed database system with partitioning and replication.
+ * The client can handle both SQL and NoSQL databases with horizontal or vertical partitioning.
+ */
 public class DatabaseNodeClient {
     private String tableName;
     private List<String> columns;
@@ -20,7 +23,12 @@ public class DatabaseNodeClient {
 
     // partitionId -> list of replicas
     private Map<Integer, List<DatabaseNodeReplica>> reps = new HashMap<>();
-    // for testing
+    /**
+     * Stops a replica of a database node by unbinding it from the RMI registry.
+     *
+     * @param partitionId the partition identifier of the replica.
+     * @param replicaId the replica identifier within the partition.
+     */
     public void stopReplica(int partitionId, int replicaId) {
         try {
             DatabaseNodeReplica replica = reps.get(partitionId).get(replicaId);
@@ -31,6 +39,12 @@ public class DatabaseNodeClient {
             e.printStackTrace();
         }
     }
+    /**
+     * Starts a replica of a database node by binding it back to the RMI registry.
+     *
+     * @param partitionId the partition identifier of the replica.
+     * @param replicaId the replica identifier within the partition.
+     */
     public void startReplica(int partitionId, int replicaId) {
         try {
             DatabaseNodeReplica replica = reps.get(partitionId).get(replicaId);
@@ -42,7 +56,16 @@ public class DatabaseNodeClient {
         }
     }
     private Map<String, Integer> columnToPartition = new HashMap<>(); // for vertical partitioning
-
+    /**
+     * Constructs a client for managing a distributed database system with partitioning and replication.
+     * The client can handle both SQL and NoSQL databases with horizontal or vertical partitioning.
+     *
+     * @param tableName the name of the table.
+     * @param columns the list of column names if it's a SQL type database, null for NoSQL.
+     * @param replicaCount the number of replicas per partition.
+     * @param partitionConfig the configuration object specifying the partition type and number.
+     * @throws RemoteException if there is an issue with remote method invocation during setup.
+     */
     public DatabaseNodeClient(String tableName, List<String> columns,
                               int replicaCount, PartitionConfig partitionConfig) throws RemoteException {
         this.tableName = tableName;
@@ -100,7 +123,10 @@ public class DatabaseNodeClient {
     public List<String> getColumns() {
         return columns;
     }
-
+    /**
+     * Periodically checks the health of all replicas in all partitions and updates their alive status.
+     * This method starts a heartbeat thread that continuously monitors the status of each replica.
+     */
     public void startHeartbeat() {
         new Thread(() -> {
             while (true) {
@@ -132,11 +158,25 @@ public class DatabaseNodeClient {
             }
         }).start();
     }
-
+    /**
+     * Retrieves the stub for communication with a database node replica using RMI.
+     *
+     * @param tableName the name of the table to access the stub.
+     * @return the remote interface for the database node.
+     * @throws RemoteException if there is an issue with remote method invocation.
+     * @throws NotBoundException if the replica is not bound in the RMI registry.
+     */
     private DatabaseNodeInterface getReplicaStub(String tableName) throws RemoteException, NotBoundException {
         Registry registry = LocateRegistry.getRegistry(1099);
         return (DatabaseNodeInterface) registry.lookup(tableName);
     }
+    /**
+     * Inserts data into a SQL database, considering the partitioning and replica details.
+     *
+     * @param columns the column names for the insert operation.
+     * @param values the corresponding values to be inserted.
+     * @throws CannotWriteException if the operation cannot be completed due to replica failures.
+     */
     public void insertSQL(List<String> columns, List<String> values) throws CannotWriteException {
         if (this.partitionType.equals("horizontal")) {
             // insert by key % numPartitions
@@ -200,6 +240,12 @@ public class DatabaseNodeClient {
         }
     }
 
+    /**
+     * Inserts key-value pairs into a NoSQL database, respecting the partitioning and replica information.
+     *
+     * @param kvPairs the key-value pairs to be inserted.
+     * @throws CannotWriteException if the operation cannot proceed due to replica failures.
+     */
     public void insertNoSQL(List<String> kvPairs) throws CannotWriteException {
         if (this.partitionType.equals("horizontal")) {
             // insert by key % numPartitions
@@ -230,7 +276,11 @@ public class DatabaseNodeClient {
             }
         }
     }
-
+    /**
+     * Retrieves data from a SQL database, handling horizontal or vertical partitioning.
+     *
+     * @return the concatenated string of results from all replicas and partitions.
+     */
     public String selectSQL() {
         if (this.partitionType.equals("horizontal") || this.partitionType.equals("vertical")) {
             // read from all partitions and aggregate
@@ -294,6 +344,11 @@ public class DatabaseNodeClient {
         }
         return "";
     }
+    /**
+     * Retrieves data from a NoSQL database, considering all active replicas across partitions.
+     *
+     * @return the concatenated string of results from all replicas.
+     */
     public String selectNoSQL() {
         if (this.partitionType.equals("horizontal")){
             // read from all partitions and aggregate
@@ -329,7 +384,14 @@ public class DatabaseNodeClient {
         }
         return "";
     }
-
+    /**
+     * Updates data in a SQL database, considering partitioning and ensuring all relevant replicas are updated.
+     *
+     * @param columns the columns to update.
+     * @param values the new values for these columns.
+     * @param where the condition specifying which records to update.
+     * @throws CannotWriteException if not all replicas are active, preventing the update.
+     */
     public void updateSQL(List<String> columns, List<String> values, String where) throws CannotWriteException {
         String[] whereParts = where.split("=");
         String[] whereArr = {whereParts[0].trim(), whereParts[1].trim()};
@@ -388,7 +450,13 @@ public class DatabaseNodeClient {
             }
         }
     }
-
+    /**
+     * Updates data in a NoSQL database, based on key-value pairs and a condition.
+     *
+     * @param kvPairs the key-value pairs to update.
+     * @param where the condition specifying which records to update.
+     * @throws CannotWriteException if the update cannot be completed due to inactive replicas.
+     */
     public void updateNoSQL(List<String> kvPairs, List<String> where) throws CannotWriteException {
         if (this.partitionType.equals("horizontal")) {
             // update by key % numPartitions
@@ -421,7 +489,12 @@ public class DatabaseNodeClient {
             }
         }
     }
-
+    /**
+     * Deletes records from a SQL database based on a condition, considering partitioning and replication.
+     *
+     * @param where the condition specifying which records to delete.
+     * @throws CannotWriteException if the delete operation cannot proceed due to inactive replicas.
+     */
     public void deleteSQL(String where) throws CannotWriteException {
         String[] whereSplit = where.split("=");
         String[] whereArr = {whereSplit[0].trim(), whereSplit[1].trim()};
@@ -484,7 +557,12 @@ public class DatabaseNodeClient {
             }
         }
     }
-
+    /**
+     * Deletes records from a NoSQL database based on a condition, considering all active replicas.
+     *
+     * @param where the list defining the condition for deletion.
+     * @throws CannotWriteException if the deletion cannot be executed due to inactive replicas.
+     */
     public void deleteNoSQL(List<String> where) throws CannotWriteException {
         if (this.partitionType.equals("horizontal")) {
             // delete by key % numPartitions

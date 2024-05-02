@@ -36,8 +36,16 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Coordinates the creation, selection, and deletion of tables.
+ */
 public class Coordinator {
-    // main method to start the program
+    /**
+     * Main method to start the program.
+     *
+     * @param args Command line arguments. If provided, the server will listen on the specified port.
+     * @throws IOException If there is an error reading from or writing to the network.
+     */
     public static void main(String[] args) throws IOException {
         int serverPort = 8080;
         if (args.length > 0) {
@@ -66,7 +74,11 @@ public class Coordinator {
     public ConcurrentHashMap<String, String> getCache() {
         return cache;
     }
-
+    /**
+     * Coordinates the creation, insertion, selection, update, and deletion of tables.
+     * @param port the server to listen on
+     * @throws IOException if an error occurs while creating the server
+     */
     public void run(int port) throws IOException {
         server = HttpServer.create(new InetSocketAddress(port), 0);
 
@@ -82,6 +94,9 @@ public class Coordinator {
 
     }
 
+    /**
+     * Stops the server and unregisters the RMI registry.
+     */
     // for test
     public void stop() {
         server.stop(1);
@@ -93,9 +108,11 @@ public class Coordinator {
     }
 
 
-    // Handler that accepts /create POST request, the request body is a JSON object with key "statement" and value "CREATE TABLE ..."
-    // The handler will parse the sql statement with jSqlParser, and if it's valid,
-    // it will create a DatabaseNode() object and add it to the list of nodes
+    /**
+     * Handler that accepts /create POST request, the request body is a JSON object with key "statement" and value "CREATE TABLE ..."
+     * The handler will parse the sql statement with jSqlParser, and if it's valid,
+     * it will create a DatabaseNode() object and add it to the list of nodes
+     */
     private class CreateHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -173,7 +190,15 @@ public class Coordinator {
         }
     }
 
+    /**
+     * Insert Handler
+     */
     private class InsertHandler implements HttpHandler {
+        /**
+         * Handles HTTP POST requests for inserting data into a table.
+         * @param exchange the HTTP exchange
+         * @throws IOException if an I/O error occurs
+         */
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())) {
@@ -253,7 +278,16 @@ public class Coordinator {
         }
     }
 
+    /**
+     * Select Handler
+     */
     private class SelectHandler implements HttpHandler {
+        /**
+         * Handles HTTP POST requests for SELECT operations.
+         *
+         * @param exchange the HTTP exchange
+         * @throws IOException if an I/O error occurs
+         */
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())) {
@@ -314,7 +348,16 @@ public class Coordinator {
         }
     }
 
+    /**
+     * Update Handler
+     */
     private class UpdateHandler implements HttpHandler {
+        /**
+         * Handles HTTP POST requests for UPDATE operations.
+         *
+         * @param exchange the HTTP exchange
+         * @throws IOException if an I/O error occurs
+         */
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())) {
@@ -402,7 +445,16 @@ public class Coordinator {
         }
     }
 
+    /**
+     * Delete Handler
+     */
     private class DeleteHandler implements HttpHandler {
+        /**
+         * Handles HTTP POST requests for DELETE operations.
+         *
+         * @param exchange the HTTP exchange
+         * @throws IOException if an I/O error occurs
+         */
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())) {
@@ -483,6 +535,14 @@ public class Coordinator {
     }
 
     // ****************** helper functions ********************
+    /**
+     * Sends a HTTP response with a specific status code and response body.
+     *
+     * @param exchange The HttpExchange object representing the current HTTP request-response exchange.
+     * @param statusCode The HTTP status code to send in the response.
+     * @param response The String body of the response to be sent.
+     * @throws IOException if an I/O error occurs.
+     */
     private void handleResponse(HttpExchange exchange, int statusCode, String response) throws IOException {
         exchange.getResponseHeaders().add("Content-Type", "application/json");
         exchange.sendResponseHeaders(statusCode, response.getBytes().length);
@@ -491,34 +551,55 @@ public class Coordinator {
         }
     }
 
+    /**
+     * Handles the successful HTTP response by sending a 200 status code with a JSON message "ok".
+     *
+     * @param exchange The HttpExchange object for the current request-response.
+     * @throws IOException if an I/O error occurs during response sending.
+     */
     private void handleOkResponse(HttpExchange exchange) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
         SuccessResponse res = new SuccessResponse("ok");
         String jsonResponse = mapper.writeValueAsString(res);
         handleResponse(exchange, 200, jsonResponse);
     }
-
+    /**
+     * Encapsulates a successful response message.
+     */
     private class SuccessResponse{
         public String message;
         public SuccessResponse(String message){
             this.message = message;
         }
     }
+    /**
+     * Handles the HTTP 400 Bad Request response with a predefined error message.
+     *
+     * @param exchange The HttpExchange object to send the response.
+     * @throws IOException if an I/O error occurs during response sending.
+     */
     private void handleBadRequest(HttpExchange exchange) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
         BadRequestResponse res = new BadRequestResponse("invalid post body");
         String jsonResponse = mapper.writeValueAsString(res);
         handleResponse(exchange, 400, jsonResponse);
     }
+    /**
+     * Handles the HTTP 400 Bad Request response with a custom error message.
+     *
+     * @param exchange The HttpExchange object for the current request-response.
+     * @param body The custom message to include in the bad request response.
+     * @throws IOException if an I/O error occurs during response sending.
+     */
     private void handleBadRequest(HttpExchange exchange, String body) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
         BadRequestResponse res = new BadRequestResponse(body);
         String jsonResponse = mapper.writeValueAsString(res);
         handleResponse(exchange, 400, jsonResponse);
     }
+    /**
+     * Encapsulates a bad request response message.
+     */
     private class BadRequestResponse {
         public String message;
         public BadRequestResponse(String message) {
@@ -526,7 +607,9 @@ public class Coordinator {
         }
     }
 
-    // ******************* for test *************************
+    /**
+     * Deletes all CSV files in the current directory and its subdirectories.
+     */
     public void deleteCsvFiles() {
         Path directory = Paths.get("").toAbsolutePath();
         try {
@@ -543,6 +626,12 @@ public class Coordinator {
             e.printStackTrace();
         }
     }
+    /**
+     * Lists all CSV files in the current directory.
+     *
+     * @return A list of CSV file names in the current directory.
+     * @throws IOException if an I/O error occurs while accessing the directory.
+     */
     public List<String> listCsvFiles() throws IOException {
         Path directoryPath = Paths.get("").toAbsolutePath();
         if (!Files.exists(directoryPath)) {
@@ -557,7 +646,12 @@ public class Coordinator {
                     .collect(Collectors.toList());
         }
     }
-
+    /**
+     * Reads and returns the content of a specified CSV file.
+     *
+     * @param fileName The name of the CSV file to read.
+     * @return The content of the CSV file as a String.
+     */
     public String readFromCsv(String fileName) {
         try {
             return Files.readString(Paths.get(fileName));

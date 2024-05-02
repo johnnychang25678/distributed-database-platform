@@ -31,6 +31,9 @@ class CoordinatorTest {
     private ObjectMapper objectMapper = new ObjectMapper();
     private static TestResultsSummary results = new TestResultsSummary();
 
+    /**
+     * Sets up the testing environment before each test case. It starts the server on a separate thread.
+     */
     @BeforeEach
     public void setUp() {
         serverThread = new Thread(() -> {
@@ -46,13 +49,22 @@ class CoordinatorTest {
         serverThread.start(); // Start server in a separate thread
     }
 
+    /**
+     * Cleans up the testing environment after each test case. It stops the server and cleans up generated CSV files.
+     */
     @AfterEach
     public void tearDown() {
         coordinator.stop();
         coordinator.deleteCsvFiles();
     }
 
-    // helper function to send a POST request
+    /**
+     * Sends a POST request to a specified endpoint with JSON input.
+     *
+     * @param endPoint The API endpoint to which the request is sent.
+     * @param jsonInputString JSON string to be sent in the request body.
+     * @return HttpResponseData containing the status code and response body.
+     */
     private HttpResponseData sendPostRequest(String endPoint, String jsonInputString) {
         HttpPost request = new HttpPost(url + endPoint);
         request.setHeader("Content-Type", "application/json");
@@ -75,10 +87,11 @@ class CoordinatorTest {
         System.out.println("Error in sendPostRequest!!!!!");
         return null;
     }
-
-    // 1. test CRUD operations for SQL
+    /**
+     * TEST1: Tests CRUD operations for an SQL database. Validates creation, insertion, selection,
+     * update, and deletion of database entries.
+     */
     @Test
-    @Order(1)
     void testCRUDSQL() throws Exception {
         System.out.println("1. Testing CRUD operations for SQL");
         // CREATE
@@ -161,9 +174,11 @@ class CoordinatorTest {
         assertEquals("", res.getResponseBody());
         results.setTestResult("Test_CRUD_SQL", true, 12.5);
     }
-    // 2. Test CRUD operations for NoSQL
+    /**
+     * TEST2: Tests CRUD operations for a NoSQL database. This includes validating the creation, insertion,
+     * selection, update, and deletion operations.
+     */
     @Test
-    @Order(2)
     void testCRUDNoSQL() throws Exception {
         System.out.println("2. Testing CRUD operations for NoSQL");
         // CREATE
@@ -246,9 +261,10 @@ class CoordinatorTest {
         results.setTestResult("Test_CRUD_NoSQL", true, 12.5);
     }
 
-    // 3. Test all replicas are in sync for SQL
+    /**
+     * TEST3: Tests synchronization of all replicas in an SQL environment to ensure data consistency across replicas.
+     */
     @Test
-    @Order(3)
     void testReplicaSyncSQL() throws Exception {
         System.out.println("3. Testing all replicas are in sync for SQL");
         // CREATE then INSERT
@@ -315,9 +331,10 @@ class CoordinatorTest {
         results.setTestResult("Test_Replica_Sync_SQL", true, 15);
     }
 
-    // 4. Test all replicas are in sync for NoSQL
+    /**
+     * TEST4: Tests synchronization of all replicas in a NoSQL environment to ensure consistency across replicas.
+     */
     @Test
-    @Order(4)
     void testReplicaSyncNoSQL() throws Exception {
         System.out.println("4. Testing all replicas are in sync for NoSQL");
         // CREATE then INSERT
@@ -383,10 +400,11 @@ class CoordinatorTest {
         results.setTestResult("Test_Replica_Sync_NoSQL", true, 15);
     }
 
-    // 5. If replica is down, the system can read but cannot update, insert, or delete for SQL
-    // Also test if the replica is back up, the system can write again
+    /**
+     * TEST5: Tests behavior when a replica is down in an SQL environment. Verifies that the system can still read but
+     * cannot write (update, insert, delete).
+     */
     @Test
-    @Order(5)
     void testReplicaDownBecomesReadOnlySQL() throws Exception {
         System.out.println("5. Testing Replica Down Becomes Read Only for SQL");
         // CREATE
@@ -499,10 +517,11 @@ class CoordinatorTest {
         results.setTestResult("Test_Replica_Down_SQL", true, 25);
     }
 
-    // 6. If replica is down, the system can read but cannot update, insert, or delete for NoSQL
-    // Also test if the replica is back up, the system can write again
+    /**
+     * TEST6: Tests behavior when a replica is down in a NoSQL environment. Ensures that the system can read but cannot
+     * write (update, insert, delete).
+     */
     @Test
-    @Order(6)
     void testReplicaDownBecomeReadOnlyNoSQL() throws Exception {
         System.out.println("6. Testing Replica Down Become Read Only for NoSQL");
         // CREATE
@@ -616,9 +635,10 @@ class CoordinatorTest {
         results.setTestResult("Test_Replica_Down_NoSQL", true, 25);
     }
 
-    // 7. Test horizontal partitioning for SQL
+    /**
+     * TEST7: Tests horizontal partitioning strategy for an SQL database to validate partition-specific data handling.
+     */
     @Test
-    @Order(7)
     void testHorizontalPartitionSQL() throws Exception {
         System.out.println("7. Testing horizontal partitioning for SQL");
         // CREATE replica = 2, partition = 2
@@ -720,9 +740,10 @@ class CoordinatorTest {
         results.setTestResult("Test_Horizontal_Partition_SQL", true, 15);
     }
 
-    // 8. Test horizontal partitioning for NoSQL
+    /**
+     * TEST8: Tests horizontal partitioning strategy for a NoSQL database to validate partition-specific data handling.
+     */
     @Test
-    @Order(8)
     void testHorizontalPartitionNoSQL() throws Exception {
         System.out.println("8. Testing horizontal partitioning for NoSQL");
         // CREATE replica = 2, partition = 2
@@ -824,9 +845,10 @@ class CoordinatorTest {
         results.setTestResult("Test_Horizontal_Partition_NoSQL", true, 15);
     }
 
-    // 9. Test vertical partitioning for SQL
+    /**
+     * TEST9: Tests vertical partitioning strategy for an SQL database to ensure data is properly distributed across partitions.
+     */
     @Test
-    @Order(9)
     void testVerticalPartitionSQL() throws Exception {
         System.out.println("9. Testing vertical partitioning for SQL");
         // CREATE replica = 2, partition = 2, [[id, name], [age]]
@@ -928,9 +950,10 @@ class CoordinatorTest {
         results.setTestResult("Test_Vertical_Partition_SQL", true, 25);
     }
 
-    // 10. Test caching
+    /**
+     * TEST10: Tests the effectiveness of a caching mechanism by verifying cache integrity after CRUD operations.
+     */
     @Test
-    @Order(10)
     void testCache() throws Exception {
         System.out.println("10. Testing caching mechanism");
         // CREATE
@@ -1017,9 +1040,10 @@ class CoordinatorTest {
         results.setTestResult("Test_Caching", true, 5);
     }
 
-    // 11. Test concurrent requests
+    /**
+     * TEST11: Tests the system's ability to handle concurrent requests, ensuring data consistency and performance under load.
+     */
     @Test
-    @Order(11)
     void testConcurrentRequests() throws Exception {
         System.out.println("11. Testing concurrency mechanism");
         // CREATE
@@ -1109,7 +1133,9 @@ class CoordinatorTest {
             System.out.println("******************************************");
         }
     }
-
+    /**
+     * This method prints a final summary of all test results once all test cases have completed.
+     */
     @AfterAll
     public static void finalResults() {
         results.printSummary();
