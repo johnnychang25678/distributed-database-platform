@@ -4,7 +4,7 @@ This project is an attempt to develop a distributed database platform that runs 
 
 ## Design
 ![design](design.png)
-Clients interact with our distributed database platform through the HTTP interface of the Coordinator. Upon receiving a table configuration (which includes table name, database type (SQL or NoSQL), partition type, partition count, and replica count), the Coordinator initializes DatabaseClient and DatabaseReplica instances. These instances communicate via the RPC protocol. The DatabaseReplica handles file system read and write operations in CSV format. Please refer to `Appendix 1` for HTTP API documentation.
+Clients interact with our distributed database platform through the HTTP interface of the Coordinator. Upon receiving a table configuration (which includes table name, database type (SQL or NoSQL), partition type, partition count, and replica count), the Coordinator initializes DatabaseClient and DatabaseReplica instances. These instances communicate via the RPC protocol. The DatabaseReplica handles file system read and write operations in CSV format.
 
 ## Query Languages
 The system supports two types of query languages:
