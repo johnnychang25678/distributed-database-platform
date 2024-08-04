@@ -57,9 +57,11 @@ Developed 11 test cases that covered all the features mentioned above:
 ## Future improvement
 1. The current consistency control mechanism operates on an "all-or-nothing" principle. This means that if a single replica becomes unavailable, the entire system transitions into read-only mode. While this approach ensures strong consistency, it significantly impacts system throughput and availability. To address this limitation, we can introduce a consensus algorithm such as **Raft**.
 
-2. The current database coordinator is a single point of failure. If the coordinator goes down, the system loses all operational information. Adding recovery mechanisms such as replication and checkpointing is required to mitigate this risk.
+2. The current database coordinator is a single point of failure. If the coordinator goes down, the system loses all operational information. Adding recovery mechanisms such as replication and **checkpointing** is required to mitigate this risk.
 
-3. The current caching implementation utilizes a basic hashmap, which lacks a mechanism for cache invalidation. To enhance this, we have two options: we could develop a more sophisticated caching system in-house, or we could integrate a proven library such as Guava Cache, which includes built-in cache invalidation features. 
+3. To enhance scalability, we can implement dynamic partitioning. However, the current partition strategy of `id mod N` may introduce overhead when scaling. Implementing **consistent hashing** can minimize this overhead and improve the system's adaptability to changes in the number of partitions.
+
+4. The current caching implementation utilizes a basic hashmap, which lacks a mechanism for cache invalidation. To enhance this, we have two options: we could develop a more sophisticated caching system in-house, or we could integrate a proven library such as Guava Cache, which includes built-in cache invalidation features. 
 
 
 ## Prerequisites to run and test:
